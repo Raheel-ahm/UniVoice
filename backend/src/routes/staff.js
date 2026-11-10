@@ -54,8 +54,8 @@ staffRouter.get('/issues', async (req, res) => {
       `id, title, description, building, room, image_path,
        category_id, priority, status, reporter_count, ai_used,
        due_at, created_at, updated_at, resolved_at,
-       categories!inner(name),
-       departments!inner(id, name)`,
+       categories!issues_category_id_fkey!inner(name),
+       departments!issues_department_id_fkey!inner(id, name)`,
     )
     .order('created_at', { ascending: false })
     .limit(1000)

@@ -145,8 +145,8 @@ issuesRouter.get('/mine', requireRole('reporter'), async (req, res) => {
       .select(`id, title, description, building, room, image_path,
                category_id, priority, status, ai_used, ai_category_id, ai_department_id, ai_priority,
                reporter_count, due_at, created_at, updated_at, resolved_at,
-               categories!inner(name),
-               departments!inner(id, name)`)
+               categories!issues_category_id_fkey!inner(name),
+               departments!issues_department_id_fkey!inner(id, name)`)
       .in('id', links.map((l) => l.issue_id)),
   )
   const rows = rawRows.map((r) => ({
@@ -182,8 +182,8 @@ issuesRouter.get('/:id', async (req, res) => {
       .select(`id, title, description, building, room, image_path,
                category_id, priority, status, ai_used, ai_category_id, ai_department_id, ai_priority,
                reporter_count, due_at, created_at, updated_at, resolved_at,
-               categories!inner(name),
-               departments!inner(id, name)`)
+               categories!issues_category_id_fkey!inner(name),
+               departments!issues_department_id_fkey!inner(id, name)`)
       .eq('id', issueId)
       .maybeSingle(),
   )
