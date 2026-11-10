@@ -56,3 +56,4 @@ UniVoice solves this by providing a unified, privacy-first incident reporting an
 
 1. In-app real-time VoIP audio calls (integrated via campus security direct phone dialing instead).
 2. Physical inventory parts warehouse purchasing system (field technicians log work orders and status).
+

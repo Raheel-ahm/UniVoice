@@ -43,3 +43,4 @@ describe('Cryptographic AI Suggestion Token', () => {
     assert.equal(readSuggestionToken('invalid-token-no-dots', userId), null)
   })
 })
+

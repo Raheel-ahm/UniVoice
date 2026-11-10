@@ -36,3 +36,4 @@ describe('Issue Status Lifecycle Workflow', () => {
     assert.equal(isValidTransition('closed', 'in_progress'), false)
   })
 })
+

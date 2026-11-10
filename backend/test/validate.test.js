@@ -49,3 +49,4 @@ describe('Validation Library', () => {
     assert.throws(() => parse(status, 'cancelled'))
   })
 })
+

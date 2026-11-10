@@ -107,3 +107,4 @@ The PostgreSQL relational model enforces domain integrity and privacy through fo
 ### Known limits
 - Supabase free-tier connection pooling limits high concurrent socket connections.
 - Serverless ephemeral instances do not maintain long-running in-memory WebSockets (managed via Supabase Realtime).
+

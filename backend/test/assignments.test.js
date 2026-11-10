@@ -22,3 +22,4 @@ describe('Technician Assignments Service', () => {
     assert.ok(departments.has('Plumbing'))
   })
 })
+

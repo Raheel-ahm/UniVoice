@@ -55,3 +55,4 @@ npm test
   2. `suggestionToken.test.js`: Cryptographic token signing, expiry, anti-tampering.
   3. `assignments.test.js`: Technician roster, departmental allocation.
   4. `statusWorkflow.test.js`: State machine lifecycle rules and illegal transition prevention.
+

@@ -6,7 +6,7 @@ Complete before 3:00 PM. Submit your final commit hash through the organizers' f
 
 - **Team name:** UniVoice Team (Lead: Raheel Ahmad)
 - **Repository URL:** https://github.com/Raheel-ahm/UniVoice.git
-- **Final commit hash:** (Will reflect latest commit on push)
+- **Final commit hash:** `9e456dfcac37513cdea9dd162f050c8fc50e9e4b`
 - **Live URL / install link:** https://univoice.vercel.app (or custom deployed Vercel domain)
 - **Submitted at (time):** 2026-11-10 15:35 PKT
 
@@ -24,3 +24,4 @@ Complete before 3:00 PM. Submit your final commit hash through the organizers' f
 - [x] No passwords, API keys or tokens in the repository or its history
 - [x] No real personal data in the repository, database or demo
 - [x] No force-pushes or history rewrites
+

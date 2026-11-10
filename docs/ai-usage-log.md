@@ -41,3 +41,4 @@ Required by the event rules. Log every meaningful use of AI tools during the bui
 1. **Database Credentials & Environment Secrets**: All Supabase keys, JWT configurations, and production environment variables were kept strictly confidential and isolated.
 2. **Core Domain Rules & Workflow Logic**: The exact state machine transitions (`open → in_progress → resolved → closed`) and mandatory handover note requirements were deliberately designed based on real campus operations needs rather than delegated to AI assumptions.
 3. **Manual Override Agency**: Ensuring that students and facility managers always retain 100% manual agency to override, edit, or bypass AI suggestions at any point.
+
