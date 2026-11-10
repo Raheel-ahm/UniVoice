@@ -9,17 +9,48 @@ export default function Login() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordTouched, setPasswordTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
 
   const isManager = targetRole === 'manager'
+  const isSignup = !isManager && studentMode === 'signup'
+
+  // Live password validation criteria checked as the user types
+  const hasLength = password.length >= 8
+  const hasUpper = /[A-Z]/.test(password)
+  const hasNumber = /[0-9]/.test(password)
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)
+  const isPasswordValid = hasLength && hasUpper && hasNumber && hasSpecial
+  const passedCriteriaCount = [hasLength, hasUpper, hasNumber, hasSpecial].filter(Boolean).length
+
+  // Live email validation
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 
   async function handleSubmit(event) {
     event.preventDefault()
     setBusy(true)
     setError(null)
     setInfo(null)
+
+    if (isSignup) {
+      if (!fullName.trim() || fullName.trim().length < 2) {
+        setError('Full Name must be at least 2 characters.')
+        setBusy(false)
+        return
+      }
+      if (!isValidEmail) {
+        setError('Please enter a valid email address.')
+        setBusy(false)
+        return
+      }
+      if (!isPasswordValid) {
+        setError('Password must meet all 4 security requirements below.')
+        setBusy(false)
+        return
+      }
+    }
 
     if (isManager || studentMode === 'signin') {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password })
@@ -200,13 +231,59 @@ export default function Login() {
               type="password"
               className="styled-input"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (!passwordTouched) setPasswordTouched(true)
+              }}
+              onBlur={() => setPasswordTouched(true)}
               placeholder="••••••••"
               required
               minLength={8}
-              autoComplete={!isManager && studentMode === 'signup' ? 'new-password' : 'current-password'}
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
             />
           </label>
+
+          {/* Live Password Checklist for Signup - checked while typing */}
+          {isSignup && (
+            <div className="password-live-checklist-card">
+              <div className="pwd-strength-bar-wrap">
+                <div
+                  className={`pwd-strength-bar-fill strength-lvl-${passedCriteriaCount}`}
+                  style={{ width: `${(passedCriteriaCount / 4) * 100}%` }}
+                />
+              </div>
+
+              <div className="pwd-checklist-head">
+                <span className="pwd-checklist-title">Password Security Requirements:</span>
+                <span className={`pwd-strength-label strength-lbl-${passedCriteriaCount}`}>
+                  {passedCriteriaCount === 4
+                    ? '✓ Strong'
+                    : passedCriteriaCount >= 2
+                    ? 'Fair'
+                    : 'Weak'}
+                </span>
+              </div>
+
+              <ul className="pwd-requirements-list">
+                <li className={`pwd-req-item ${hasLength ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                  <span className="req-bullet">{hasLength ? '✓' : '○'}</span>
+                  <span>At least 8 characters ({password.length}/8)</span>
+                </li>
+                <li className={`pwd-req-item ${hasUpper ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                  <span className="req-bullet">{hasUpper ? '✓' : '○'}</span>
+                  <span>At least one uppercase letter (A-Z)</span>
+                </li>
+                <li className={`pwd-req-item ${hasNumber ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                  <span className="req-bullet">{hasNumber ? '✓' : '○'}</span>
+                  <span>At least one number (0-9)</span>
+                </li>
+                <li className={`pwd-req-item ${hasSpecial ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                  <span className="req-bullet">{hasSpecial ? '✓' : '○'}</span>
+                  <span>At least one special character (!@#$%^&*...)</span>
+                </li>
+              </ul>
+            </div>
+          )}
 
           {error && <div className="alert alert-error">{error}</div>}
           {info && <div className="alert alert-info">{info}</div>}
@@ -214,7 +291,7 @@ export default function Login() {
           <button
             type="submit"
             className={`btn btn-primary btn-block btn-auth-submit ${isManager ? 'btn-manager-gradient' : ''}`}
-            disabled={busy}
+            disabled={busy || (isSignup && !isPasswordValid)}
           >
             {busy ? (
               <span className="spinner-sm" />

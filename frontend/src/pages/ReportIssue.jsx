@@ -48,13 +48,30 @@ export default function ReportIssue() {
 
   function handleImageChange(e) {
     const file = e.target.files?.[0] ?? null
-    setImage(file)
-    if (file) {
-      const url = URL.createObjectURL(file)
-      setImagePreview(url)
-    } else {
+    if (!file) {
+      setImage(null)
       setImagePreview(null)
+      return
     }
+    const validMimes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!validMimes.includes(file.type)) {
+      setError('Invalid format: Photo must be a JPEG, PNG, or WebP image.')
+      e.target.value = ''
+      setImage(null)
+      setImagePreview(null)
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large: Photo must be 5 MB or smaller.')
+      e.target.value = ''
+      setImage(null)
+      setImagePreview(null)
+      return
+    }
+    setError(null)
+    setImage(file)
+    const url = URL.createObjectURL(file)
+    setImagePreview(url)
   }
 
   function resetAll() {
@@ -73,6 +90,18 @@ export default function ReportIssue() {
   // Step 1 -> 2: ask the AI for suggestions; fall back to manual entry.
   async function requestSuggestions(event) {
     event.preventDefault()
+    if (!details.title.trim() || details.title.trim().length < 3) {
+      setError('Title must be at least 3 characters long.')
+      return
+    }
+    if (!details.description.trim() || details.description.trim().length < 10) {
+      setError('Description must be at least 10 characters long.')
+      return
+    }
+    if (!details.building.trim()) {
+      setError('Please specify the campus building.')
+      return
+    }
     setBusy(true)
     setError(null)
     let response
@@ -243,7 +272,7 @@ export default function ReportIssue() {
           <label className="field">
             <span className="field-label">Issue Title</span>
             <input
-              className="styled-input"
+              className={`styled-input ${details.title.length > 0 && details.title.trim().length < 3 ? 'input-error' : ''}`}
               value={details.title}
               onChange={(e) => updateDetails('title', e.target.value)}
               placeholder="e.g. Water leaking from ceiling near lab entrance"
@@ -251,12 +280,15 @@ export default function ReportIssue() {
               minLength={3}
               maxLength={150}
             />
+            {details.title.length > 0 && details.title.trim().length < 3 && (
+              <span className="field-hint text-danger">Title must be at least 3 characters.</span>
+            )}
           </label>
 
           <label className="field">
             <span className="field-label">Detailed Description</span>
             <textarea
-              className="styled-textarea"
+              className={`styled-textarea ${details.description.length > 0 && details.description.trim().length < 10 ? 'input-error' : ''}`}
               value={details.description}
               onChange={(e) => updateDetails('description', e.target.value)}
               placeholder="What is broken? When did it start? Does it cause flooding, sparks, or block access?"
@@ -265,7 +297,16 @@ export default function ReportIssue() {
               maxLength={2000}
               rows={5}
             />
-            <div className="char-count">{details.description.length} / 2000 characters</div>
+            <div className="char-count-wrap">
+              {details.description.length > 0 && details.description.trim().length < 10 ? (
+                <span className="field-hint text-danger">
+                  At least 10 characters required ({10 - details.description.trim().length} more needed)
+                </span>
+              ) : (
+                <span className="field-hint text-muted">Include room number, equipment details, or urgency.</span>
+              )}
+              <div className="char-count">{details.description.length} / 2000 characters</div>
+            </div>
           </label>
 
           <div className="row-two-col">

@@ -112,43 +112,29 @@ export function ManagerProvider({ children }) {
   const { user, activeDepartment } = useAuth()
   const [data, setData] = useState(null)
   const [mockIssues, setMockIssues] = useState(INITIAL_MOCK_ISSUES)
+  const [departmentFilter, setDepartmentFilter] = useState('all')
   const [isUsingLiveApi, setIsUsingLiveApi] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const loadData = useCallback((dept = departmentFilter) => {
+    const param = dept && dept !== 'all' ? `?department_id=${dept}` : ''
+    api
+      .get(`/staff/issues${param}`)
+      .then((res) => {
+        setData(res)
+        setIsUsingLiveApi(true)
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.warn('Could not load live staff issues:', err)
+        setIsUsingLiveApi(false)
+        setLoading(false)
+      })
+  }, [departmentFilter])
+
   useEffect(() => {
-    let mounted = true
-    api
-      .get('/staff/issues')
-      .then((res) => {
-        if (!mounted) return
-        setData(res)
-        setIsUsingLiveApi(true)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (!mounted) return
-        setIsUsingLiveApi(false)
-        setLoading(false)
-      })
-
-    return () => {
-      mounted = false
-    }
-  }, [activeDepartment])
-
-  const loadData = useCallback(() => {
-    api
-      .get('/staff/issues')
-      .then((res) => {
-        setData(res)
-        setIsUsingLiveApi(true)
-        setLoading(false)
-      })
-      .catch(() => {
-        setIsUsingLiveApi(false)
-        setLoading(false)
-      })
-  }, [])
+    loadData(departmentFilter)
+  }, [departmentFilter, loadData])
 
   const issues = useMemo(() => {
     if (isUsingLiveApi && data?.issues) return data.issues
@@ -167,7 +153,7 @@ export function ManagerProvider({ children }) {
     }
   }, [isUsingLiveApi, data, issues])
 
-  const departmentName = (isUsingLiveApi && data?.department) || user?.departmentName || activeDepartment || 'Electrical'
+  const departmentName = (isUsingLiveApi && data?.department) || user?.departmentName || activeDepartment || 'Campus Operations'
 
   const updateStatus = useCallback(
     async (issueId, newStatus, note = '') => {
@@ -200,6 +186,8 @@ export function ManagerProvider({ children }) {
     <ManagerContext.Provider
       value={{
         departmentName,
+        departmentFilter,
+        setDepartmentFilter,
         issues,
         summary,
         loading,
