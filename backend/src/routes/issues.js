@@ -138,9 +138,26 @@ issuesRouter.get('/mine', requireRole('reporter'), async (req, res) => {
   )
   if (links.length === 0) return res.json({ issues: [] })
 
-  const rows = must(
-    await db.from('issue_overview').select(ISSUE_COLUMNS).in('id', links.map((l) => l.issue_id)),
+  // Query base issues table (service role bypasses RLS; security_invoker view does not)
+  const rawRows = must(
+    await db
+      .from('issues')
+      .select(`id, title, description, building, room, image_path,
+               category_id, priority, status, ai_used, ai_category_id, ai_department_id, ai_priority,
+               reporter_count, due_at, created_at, updated_at, resolved_at,
+               categories!inner(name),
+               departments!inner(id, name)`)
+      .in('id', links.map((l) => l.issue_id)),
   )
+  const rows = rawRows.map((r) => ({
+    ...r,
+    category_name: r.categories?.name ?? null,
+    department_id: r.departments?.id ?? null,
+    department_name: r.departments?.name ?? null,
+    is_overdue: ['open', 'in_progress'].includes(r.status) && r.due_at && new Date(r.due_at) < new Date(),
+    categories: undefined,
+    departments: undefined,
+  }))
   const linkById = new Map(links.map((l) => [l.issue_id, l]))
   const issues = rows
     .map((row) => {
@@ -157,8 +174,31 @@ issuesRouter.get('/mine', requireRole('reporter'), async (req, res) => {
 // ---------------------------------------------------------------------------
 issuesRouter.get('/:id', async (req, res) => {
   const issueId = parse(uuid, req.params.id)
-  const row = must(await db.from('issue_overview').select(ISSUE_COLUMNS).eq('id', issueId).maybeSingle())
+  // Query the base issues table directly (service role bypasses RLS on tables;
+  // the security_invoker view filters all rows when auth.uid() is null).
+  const row = must(
+    await db
+      .from('issues')
+      .select(`id, title, description, building, room, image_path,
+               category_id, priority, status, ai_used, ai_category_id, ai_department_id, ai_priority,
+               reporter_count, due_at, created_at, updated_at, resolved_at,
+               categories!inner(name),
+               departments!inner(id, name)`)
+      .eq('id', issueId)
+      .maybeSingle(),
+  )
   if (!row) throw new HttpError(404, 'Issue not found')
+
+  // Flatten joined table names to match the DTO shape
+  const flatRow = {
+    ...row,
+    category_name: row.categories?.name ?? null,
+    department_id: row.departments?.id ?? null,
+    department_name: row.departments?.name ?? null,
+    is_overdue: ['open', 'in_progress'].includes(row.status) && row.due_at && new Date(row.due_at) < new Date(),
+    categories: undefined,
+    departments: undefined,
+  }
 
   const isStaff = req.user.role === 'staff'
   let myLink = null
@@ -194,8 +234,8 @@ issuesRouter.get('/:id', async (req, res) => {
 
   const result = {
     issue: {
-      ...toIssueDto(row),
-      image_url: await signedImageUrl(row.image_path),
+      ...toIssueDto(flatRow),
+      image_url: await signedImageUrl(flatRow.image_path),
       assigned_technician: assignment?.technician_name ?? null,
       assigned_technician_id: assignment?.technician_id ?? null,
       assigned_at: assignment?.assigned_at ?? null,

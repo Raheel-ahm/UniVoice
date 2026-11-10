@@ -34,7 +34,7 @@ function compareForTriage(a, b) {
 staffRouter.get('/technicians', async (req, res) => {
   const rows = must(
     await db
-      .from('issue_overview')
+      .from('issues')
       .select('id, title, building, room, priority, status')
       .limit(1000),
   )
@@ -44,12 +44,18 @@ staffRouter.get('/technicians', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // Issues: list all issues with technician assignment data attached
+// Service-role queries the base tables directly (security_invoker views filter
+// out all rows when auth.uid() is null under the service role).
 // ---------------------------------------------------------------------------
 staffRouter.get('/issues', async (req, res) => {
   let query = db
-    .from('issue_overview')
+    .from('issues')
     .select(
-      'id, title, description, building, room, image_path, category_id, category_name, department_id, department_name, priority, status, reporter_count, ai_used, due_at, created_at, updated_at, resolved_at, is_overdue',
+      `id, title, description, building, room, image_path,
+       category_id, priority, status, reporter_count, ai_used,
+       due_at, created_at, updated_at, resolved_at,
+       categories!inner(name),
+       departments!inner(id, name)`,
     )
     .order('created_at', { ascending: false })
     .limit(1000)
@@ -60,7 +66,17 @@ staffRouter.get('/issues', async (req, res) => {
     query = query.eq('department_id', Number(deptParam))
   }
 
-  const rows = must(await query)
+  const rawRows = must(await query)
+  // Normalize joined table fields to flat DTO shape matching issue_overview columns
+  const rows = rawRows.map((r) => ({
+    ...r,
+    category_name: r.categories?.name ?? null,
+    department_id: r.departments?.id ?? null,
+    department_name: r.departments?.name ?? null,
+    is_overdue: ['open', 'in_progress'].includes(r.status) && r.due_at && new Date(r.due_at) < new Date(),
+    categories: undefined,
+    departments: undefined,
+  }))
   const issues = rows
     .map(toIssueDto)
     .map((issue) => {
