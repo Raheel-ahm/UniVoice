@@ -219,3 +219,4 @@ emergencyRouter.get('/', (req, res) => {
 emergencyRouter.get('/screen', (_req, res) => {
   res.type('html').send(renderEmergencyHtml())
 })
+

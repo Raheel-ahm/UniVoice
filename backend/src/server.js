@@ -22,7 +22,12 @@ app.use(express.json({ limit: '100kb' }))
 
 // Public health and emergency screens/endpoints (no sign-in required)
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, ai: config.anthropicConfigured })
+  res.json({
+    ok: true,
+    ai_available: (config.geminiConfigured || config.anthropicConfigured) && config.enableAi,
+    ai_enabled: config.enableAi,
+    model: config.geminiConfigured ? config.geminiModel : (config.anthropicConfigured ? config.anthropicModel : null),
+  })
 })
 
 app.use('/emergency', emergencyRouter)
@@ -40,6 +45,25 @@ app.get('/api/meta', async (_req, res) => {
   res.json(await getCatalog())
 })
 
+// Endpoint to view AI status or toggle for testing
+app.get('/api/ai/status', (_req, res) => {
+  res.json({
+    enabled: config.enableAi,
+    gemini_configured: config.geminiConfigured,
+    model: config.geminiModel,
+  })
+})
+
+app.post('/api/ai/toggle', (req, res) => {
+  const { enabled } = req.body ?? {}
+  config.enableAi = typeof enabled === 'boolean' ? enabled : !config.enableAi
+  res.json({
+    ok: true,
+    enabled: config.enableAi,
+    message: config.enableAi ? 'AI suggestions enabled' : 'AI suggestions disabled (test mode active)',
+  })
+})
+
 app.post(
   '/api/ai/classify',
   requireRole('reporter'),
@@ -51,10 +75,17 @@ app.post(
         description: issueText.description,
         building: issueText.building.optional(),
         room: issueText.room,
+        disable_ai: z.boolean().optional(),
       }),
       req.body,
     )
-    const result = await classifyIssue(input)
+    const disableAi = Boolean(
+      input.disable_ai ||
+      req.query.disable_ai === 'true' ||
+      req.query.disable_ai === '1' ||
+      req.get('x-disable-ai') === 'true'
+    )
+    const result = await classifyIssue({ ...input, disableAi })
     if (!result.available) return res.json(result)
 
     res.json({ ...result, token: createSuggestionToken(req.user.id, result.suggestion) })
@@ -91,5 +122,11 @@ app.listen(config.port, (error) => {
     process.exit(1)
   }
   console.log(`UniVoice API listening on http://localhost:${config.port}`)
-  if (!config.anthropicConfigured) console.log('ANTHROPIC_API_KEY not set: AI suggestions disabled, manual entry only.')
+  if (config.geminiConfigured) {
+    console.log(`Gemini AI configured (model: ${config.geminiModel}, status: ${config.enableAi ? 'enabled' : 'disabled'}).`)
+  } else if (config.anthropicConfigured) {
+    console.log('Anthropic AI configured.')
+  } else {
+    console.log('No AI key set: suggestions disabled, manual entry only.')
+  }
 })
