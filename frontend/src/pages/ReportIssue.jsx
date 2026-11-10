@@ -87,21 +87,27 @@ export default function ReportIssue() {
     setError(null)
   }
 
-  // Step 1 -> 2: ask the AI for suggestions; fall back to manual entry.
-  async function requestSuggestions(event) {
-    event.preventDefault()
+  function validateDetails() {
     if (!details.title.trim() || details.title.trim().length < 3) {
       setError('Title must be at least 3 characters long.')
-      return
+      return false
     }
     if (!details.description.trim() || details.description.trim().length < 10) {
       setError('Description must be at least 10 characters long.')
-      return
+      return false
     }
     if (!details.building.trim()) {
       setError('Please specify the campus building.')
-      return
+      return false
     }
+    setError(null)
+    return true
+  }
+
+  // Step 1 -> 2: ask the AI for suggestions
+  async function requestSuggestions(event) {
+    if (event) event.preventDefault()
+    if (!validateDetails()) return
     setBusy(true)
     setError(null)
     let response
@@ -130,6 +136,16 @@ export default function ReportIssue() {
       setClassification(EMPTY_CLASS)
     }
     setBusy(false)
+    setStep('classify')
+  }
+
+  // Step 1 -> 2 Manual: skip AI, assign category & priority manually
+  function startManualClassification() {
+    if (!validateDetails()) return
+    setAi({ available: false, manual: true, reason: 'Manual categorization selected by reporter' })
+    if (!classification.priority) {
+      setClassification((c) => ({ ...c, priority: c.priority || 'medium' }))
+    }
     setStep('classify')
   }
 
@@ -183,7 +199,7 @@ export default function ReportIssue() {
       form.set('category_id', String(classification.category_id))
       form.set('department_id', String(classification.department_id))
       form.set('priority', classification.priority)
-      if (ai?.available && ai.token) form.set('ai_token', ai.token)
+      if (ai?.available && !ai?.manual && ai?.token) form.set('ai_token', ai.token)
       if (image) form.set('image', image)
 
       const { id } = await api.post('/issues', form)
@@ -366,7 +382,15 @@ export default function ReportIssue() {
             )}
           </div>
 
-          <div className="form-actions-right">
+          <div className="form-actions-split">
+            <button
+              type="button"
+              className="btn btn-secondary btn-manual-triage"
+              onClick={startManualClassification}
+              disabled={busy}
+            >
+              ✍️ Assign Priority & Category Manually
+            </button>
             <button type="submit" className="btn btn-primary btn-submit-step" disabled={busy}>
               {busy ? (
                 <>
@@ -374,7 +398,7 @@ export default function ReportIssue() {
                 </>
               ) : (
                 <>
-                  <IconSparkles /> Continue to AI Categorization <IconArrowRight />
+                  <IconSparkles /> Continue with AI Suggestions <IconArrowRight />
                 </>
               )}
             </button>
@@ -390,15 +414,43 @@ export default function ReportIssue() {
             <h3>Category & Department Review</h3>
           </div>
 
-          {ai?.available ? (
+          {ai?.available && !ai?.manual ? (
             <div className="ai-suggestion-box">
               <div className="ai-badge-row">
                 <span className="ai-pill">
                   <IconSparkles /> AI Classifier Suggestion
                 </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost btn-switch-mode"
+                  onClick={() => {
+                    setAi({ available: false, manual: true, reason: 'Switched to manual assignment' })
+                  }}
+                >
+                  ✍️ Switch to Full Manual Mode
+                </button>
               </div>
               <p className="ai-reason-text">{ai.suggestion.reason}</p>
-              <span className="ai-sub-note">You can edit any of these suggestions below if needed.</span>
+              <span className="ai-sub-note">You can freely edit or override any category, department, or priority below.</span>
+            </div>
+          ) : ai?.manual ? (
+            <div className="manual-suggestion-box">
+              <div className="ai-badge-row">
+                <span className="manual-pill">
+                  ✍️ Manual Classification Mode
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost btn-switch-mode"
+                  onClick={requestSuggestions}
+                  disabled={busy}
+                >
+                  {busy ? <span className="spinner-sm" /> : <><IconSparkles /> Let AI Suggest Instead</>}
+                </button>
+              </div>
+              <p className="manual-reason-text">
+                Select the problem category, responsible department, and urgency priority manually below.
+              </p>
             </div>
           ) : (
             <div className="alert alert-warn">
@@ -417,7 +469,7 @@ export default function ReportIssue() {
               onChange={(e) => chooseCategory(e.target.value)}
               required
             >
-              <option value="">Select a category</option>
+              <option value="">-- Select Problem Category --</option>
               {catalog.categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -440,13 +492,16 @@ export default function ReportIssue() {
               }}
               required
             >
-              <option value="">Select a department</option>
+              <option value="">-- Select Department --</option>
               {catalog.departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </select>
+            <span className="field-hint text-muted">
+              Auto-selected based on category. You can reassign to another department if appropriate.
+            </span>
           </label>
 
           <fieldset className="field">
@@ -469,13 +524,18 @@ export default function ReportIssue() {
                     required
                   />
                   <div className="chip-content">
-                    <span className="chip-title">{label} Priority</span>
+                    <div className="chip-head-row">
+                      <span className="chip-title">{label} Priority</span>
+                      {classification.priority === value && (
+                        <span className="chip-selected-pill">✓ Selected</span>
+                      )}
+                    </div>
                     <span className="chip-desc">
                       {value === 'high'
-                        ? 'Safety hazard / critical halt (24h SLA)'
+                        ? 'Immediate safety hazard / flood / live sparks / halt (24h SLA)'
                         : value === 'medium'
-                          ? 'Equipment fault / disrupts work (72h SLA)'
-                          : 'Minor wear & tear / cosmetic (7d SLA)'}
+                          ? 'Equipment fault / broken AC / disrupts classes or work (72h SLA)'
+                          : 'Minor wear & tear / peeling paint / cosmetic (7-day SLA)'}
                     </span>
                   </div>
                 </label>
@@ -602,13 +662,17 @@ export default function ReportIssue() {
 }
 
 function AiTag({ ai, field, value }) {
-  if (!ai?.available) return null
-  const suggested = ai.suggestion[field]
+  if (!ai || ai.manual || !ai.available) {
+    return value ? (
+      <span className="tag-manual-pill">✍️ Manually Assigned</span>
+    ) : null
+  }
+  const suggested = ai.suggestion?.[field]
   return suggested === value ? (
     <span className="tag-ai-pill">
       <IconSparkles /> AI Suggested
     </span>
   ) : (
-    <span className="tag-edited-pill">Edited by you</span>
+    <span className="tag-edited-pill">✍️ Manually Overridden</span>
   )
 }

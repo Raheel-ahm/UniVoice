@@ -46,7 +46,17 @@ export default function Login() {
         return
       }
       if (!isPasswordValid) {
-        setError('Password must meet all 4 security requirements below.')
+        setBusy(false)
+        return
+      }
+    } else {
+      if (!email.trim() || !isValidEmail) {
+        setError('Please enter a valid email address.')
+        setBusy(false)
+        return
+      }
+      if (!password) {
+        setError('Please enter your password.')
         setBusy(false)
         return
       }
@@ -110,6 +120,8 @@ export default function Login() {
             onClick={() => {
               setTargetRole('student')
               setError(null)
+              setInfo(null)
+              setPasswordTouched(false)
               setEmail('')
               setPassword('')
             }}
@@ -129,6 +141,8 @@ export default function Login() {
             onClick={() => {
               setTargetRole('manager')
               setError(null)
+              setInfo(null)
+              setPasswordTouched(false)
               setEmail('')
               setPassword('')
             }}
@@ -175,6 +189,8 @@ export default function Login() {
               onClick={() => {
                 setStudentMode('signin')
                 setError(null)
+                setInfo(null)
+                setPasswordTouched(false)
               }}
             >
               Sign In as Student
@@ -187,6 +203,8 @@ export default function Login() {
               onClick={() => {
                 setStudentMode('signup')
                 setError(null)
+                setInfo(null)
+                setPasswordTouched(false)
               }}
             >
               Create Student Account
@@ -194,7 +212,7 @@ export default function Login() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="auth-form-body">
+        <form noValidate onSubmit={handleSubmit} className="auth-form-body">
           {!isManager && studentMode === 'signup' && (
             <label className="field">
               <span className="field-label">Full Name</span>
@@ -238,48 +256,38 @@ export default function Login() {
               onBlur={() => setPasswordTouched(true)}
               placeholder="••••••••"
               required
-              minLength={8}
               autoComplete={isSignup ? 'new-password' : 'current-password'}
             />
           </label>
 
-          {/* Live Password Checklist for Signup - checked while typing */}
+          {/* Live Password Checklist: strictly rendered ONLY on Signup, never on Login page */}
           {isSignup && (
             <div className="password-live-checklist-card">
-              <div className="pwd-strength-bar-wrap">
-                <div
-                  className={`pwd-strength-bar-fill strength-lvl-${passedCriteriaCount}`}
-                  style={{ width: `${(passedCriteriaCount / 4) * 100}%` }}
-                />
-              </div>
-
               <div className="pwd-checklist-head">
                 <span className="pwd-checklist-title">Password Security Requirements:</span>
                 <span className={`pwd-strength-label strength-lbl-${passedCriteriaCount}`}>
                   {passedCriteriaCount === 4
-                    ? '✓ Strong'
-                    : passedCriteriaCount >= 2
-                    ? 'Fair'
-                    : 'Weak'}
+                    ? '✓ All 4 Requirements Met'
+                    : `${passedCriteriaCount} of 4 Met`}
                 </span>
               </div>
 
               <ul className="pwd-requirements-list">
-                <li className={`pwd-req-item ${hasLength ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                <li className={`pwd-req-item ${hasLength ? 'passed' : 'pending'}`}>
                   <span className="req-bullet">{hasLength ? '✓' : '○'}</span>
-                  <span>At least 8 characters ({password.length}/8)</span>
+                  <span className="req-text">At least 8 characters {password.length > 0 && `(${password.length}/8)`}</span>
                 </li>
-                <li className={`pwd-req-item ${hasUpper ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                <li className={`pwd-req-item ${hasUpper ? 'passed' : 'pending'}`}>
                   <span className="req-bullet">{hasUpper ? '✓' : '○'}</span>
-                  <span>At least one uppercase letter (A-Z)</span>
+                  <span className="req-text">At least one uppercase letter (A-Z)</span>
                 </li>
-                <li className={`pwd-req-item ${hasNumber ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                <li className={`pwd-req-item ${hasNumber ? 'passed' : 'pending'}`}>
                   <span className="req-bullet">{hasNumber ? '✓' : '○'}</span>
-                  <span>At least one number (0-9)</span>
+                  <span className="req-text">At least one number (0-9)</span>
                 </li>
-                <li className={`pwd-req-item ${hasSpecial ? 'passed' : passwordTouched ? 'failed' : ''}`}>
+                <li className={`pwd-req-item ${hasSpecial ? 'passed' : 'pending'}`}>
                   <span className="req-bullet">{hasSpecial ? '✓' : '○'}</span>
-                  <span>At least one special character (!@#$%^&*...)</span>
+                  <span className="req-text">At least one special character (!@#$%^&*...)</span>
                 </li>
               </ul>
             </div>
