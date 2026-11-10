@@ -1,10 +1,20 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { IconEmergency, IconPhone, IconShield } from '../components/Icons.jsx'
 
 export default function Emergency() {
   const { user } = useAuth()
-  const home = user?.role === 'staff' ? '/staff' : '/dashboard'
+  const home = user?.role === 'staff' ? '/manager' : '/dashboard'
+  const [copiedPhone, setCopiedPhone] = useState(null)
+
+  function handleCopy(phone, label) {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(phone)
+      setCopiedPhone(label)
+      setTimeout(() => setCopiedPhone(null), 2200)
+    }
+  }
 
   return (
     <div className="emergency-page">
@@ -40,6 +50,13 @@ export default function Emergency() {
             <a href="tel:5550199" className="btn btn-call-emergency">
               <IconPhone /> Call Security Now
             </a>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm copy-btn"
+              onClick={() => handleCopy('(555) 0199', 'security')}
+            >
+              {copiedPhone === 'security' ? '✓ Copied Number' : 'Copy Number'}
+            </button>
             <span className="location-pill">HQ: Main Gate Booth, Security Center</span>
           </div>
         </div>
@@ -63,6 +80,13 @@ export default function Emergency() {
             <a href="tel:5550911" className="btn btn-call-secondary">
               <IconPhone /> Call Medical Clinic
             </a>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm copy-btn"
+              onClick={() => handleCopy('(555) 0911', 'medical')}
+            >
+              {copiedPhone === 'medical' ? '✓ Copied Number' : 'Copy Number'}
+            </button>
             <span className="location-pill">Clinic: Student Center, Ground Floor</span>
           </div>
         </div>
@@ -86,6 +110,13 @@ export default function Emergency() {
             <a href="tel:5550999" className="btn btn-call-secondary">
               <IconPhone /> Call Fire Safety
             </a>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm copy-btn"
+              onClick={() => handleCopy('(555) 0999', 'fire')}
+            >
+              {copiedPhone === 'fire' ? '✓ Copied Number' : 'Copy Number'}
+            </button>
             <span className="location-pill">Station: Engineering Complex South</span>
           </div>
         </div>
@@ -129,4 +160,3 @@ export default function Emergency() {
     </div>
   )
 }
-

@@ -62,8 +62,9 @@ export default function ManagerOverview() {
 
       <div className="stats-cards-grid staff-stats">
         <Link
-          to="/manager/escalations"
+          to="/manager/issues?status=overdue"
           className={`stat-card ${summary.overdue > 0 ? 'overdue-alert-card' : ''}`}
+          title="Filter overdue & escalated issues"
         >
           <div className="stat-card-graphic">
             <div className={`graphic-icon ${summary.overdue > 0 ? 'bg-danger' : 'bg-violet'}`}>
@@ -76,7 +77,7 @@ export default function ManagerOverview() {
           </div>
         </Link>
 
-        <Link to="/manager/issues" className="stat-card">
+        <Link to="/manager/issues?status=open" className="stat-card" title="Filter open & unassigned work orders">
           <div className="stat-card-graphic">
             <div className="graphic-icon bg-violet">
               <IconSparkles />
@@ -88,7 +89,7 @@ export default function ManagerOverview() {
           </div>
         </Link>
 
-        <Link to="/manager/issues" className="stat-card active-stat-card">
+        <Link to="/manager/issues?status=in_progress" className="stat-card active-stat-card" title="Filter in-progress work orders">
           <div className="stat-card-graphic">
             <div className="graphic-icon bg-indigo">
               <IconWrench />
@@ -100,7 +101,7 @@ export default function ManagerOverview() {
           </div>
         </Link>
 
-        <Link to="/manager/issues" className="stat-card">
+        <Link to="/manager/issues?status=resolved" className="stat-card" title="Filter resolved work orders">
           <div className="stat-card-graphic">
             <div className="graphic-icon bg-emerald">
               <IconCheckCircle />
