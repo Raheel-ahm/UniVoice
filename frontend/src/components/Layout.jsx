@@ -21,6 +21,8 @@ export default function Layout() {
   const { user, signOut, isStaff, activeDepartment } = useAuth()
   const navigate = useNavigate()
   const [globalSearch, setGlobalSearch] = useState('')
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [notificationsRead, setNotificationsRead] = useState(false)
 
   const displayName = user?.fullName || user?.email?.split('@')[0] || 'User'
   const roleSubtitle = isStaff
@@ -39,9 +41,9 @@ export default function Layout() {
     e.preventDefault()
     if (!globalSearch.trim()) return
     if (isStaff) {
-      navigate('/manager/issues')
+      navigate(`/manager/issues?q=${encodeURIComponent(globalSearch.trim())}`)
     } else {
-      navigate('/my-reports')
+      navigate(`/my-reports?q=${encodeURIComponent(globalSearch.trim())}`)
     }
   }
 
@@ -203,10 +205,65 @@ export default function Layout() {
               <span className="emergency-pill-text">Security: (555) 0199</span>
             </Link>
 
-            {/* Notification Bell */}
-            <div className="notification-bell-btn" title="Notifications">
-              <IconBell />
-              <span className="notification-badge-dot" />
+            {/* Notification Bell with interactive dropdown */}
+            <div className="notification-wrapper">
+              <button
+                type="button"
+                className={`notification-bell-btn ${showNotifications ? 'active' : ''}`}
+                title="Notifications & Alerts"
+                onClick={() => setShowNotifications((prev) => !prev)}
+              >
+                <IconBell />
+                {!notificationsRead && <span className="notification-badge-dot" />}
+              </button>
+
+              {showNotifications && (
+                <div className="notification-dropdown">
+                  <div className="notification-dropdown-header">
+                    <h4>Notifications</h4>
+                    {!notificationsRead && (
+                      <button
+                        type="button"
+                        className="btn-link-subtle"
+                        onClick={() => setNotificationsRead(true)}
+                      >
+                        Mark as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="notification-list">
+                    <div className="notification-item">
+                      <span className="notif-dot bg-success" />
+                      <div className="notif-content">
+                        <strong>Gemini AI Active</strong>
+                        <p>Automatic triage and aspect-based priority scoring online.</p>
+                      </div>
+                    </div>
+                    <div className="notification-item">
+                      <span className="notif-dot bg-danger" />
+                      <div className="notif-content">
+                        <strong>Campus Emergency Active</strong>
+                        <p>24/7 Security dispatch line: (555) 0199.</p>
+                      </div>
+                    </div>
+                    <div className="notification-item">
+                      <span className="notif-dot bg-violet" />
+                      <div className="notif-content">
+                        <strong>SLA Enforcement</strong>
+                        <p>Overdue work orders escalate directly to Manager dashboard.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="notification-dropdown-footer">
+                    <Link
+                      to={isStaff ? '/manager/escalations' : '/emergency'}
+                      onClick={() => setShowNotifications(false)}
+                    >
+                      {isStaff ? 'Review Escalations Queue →' : 'View Emergency Protocols →'}
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Profile pill */}

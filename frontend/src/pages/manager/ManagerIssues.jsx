@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useManager } from '../../context/ManagerContext.jsx'
 import { formatDateTime, location, relativeTime } from '../../lib/format.js'
 import { OverdueBadge, PriorityBadge, StatusBadge } from '../../components/Badges.jsx'
@@ -15,12 +15,20 @@ import {
 
 export default function ManagerIssues() {
   const { departmentName, issues, updateStatus } = useManager()
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [searchParams] = useSearchParams()
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all')
   const [priorityFilter, setPriorityFilter] = useState('all')
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(searchParams.get('q') || '')
   const [actionLoading, setActionLoading] = useState(null)
   const [quickNoteModal, setQuickNoteModal] = useState(null) // { issueId, nextStatus }
   const [noteInput, setNoteInput] = useState('')
+
+  useEffect(() => {
+    const s = searchParams.get('status')
+    if (s) setStatusFilter(s)
+    const q = searchParams.get('q')
+    if (q !== null) setSearch(q)
+  }, [searchParams])
 
   const filteredIssues = useMemo(() => {
     return issues.filter((i) => {
