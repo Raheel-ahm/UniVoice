@@ -4,6 +4,14 @@ import { api } from '../lib/api.js'
 import { PRIORITY_LABELS } from '../lib/constants.js'
 import { formatDateTime } from '../lib/format.js'
 import { StatusBadge } from '../components/Badges.jsx'
+import {
+  IconArrowRight,
+  IconCamera,
+  IconCheckCircle,
+  IconEmergency,
+  IconSparkles,
+  IconUsers,
+} from '../components/Icons.jsx'
 
 const EMPTY_DETAILS = { title: '', description: '', building: '', room: '', note: '' }
 const EMPTY_CLASS = { category_id: '', department_id: '', priority: '' }
@@ -15,11 +23,12 @@ export default function ReportIssue() {
   const [step, setStep] = useState('details') // details -> classify -> duplicates -> done
   const [details, setDetails] = useState(EMPTY_DETAILS)
   const [image, setImage] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
   const [classification, setClassification] = useState(EMPTY_CLASS)
   const [departmentTouched, setDepartmentTouched] = useState(false)
   const [ai, setAi] = useState(null) // { available, suggestion?, token?, reason? }
   const [duplicates, setDuplicates] = useState([])
-  const [result, setResult] = useState(null) // { id, joined }
+  const [result, setResult] = useState(null) // { id, joined, alreadyLinked }
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -37,10 +46,22 @@ export default function ReportIssue() {
     setDetails((d) => ({ ...d, [field]: value }))
   }
 
+  function handleImageChange(e) {
+    const file = e.target.files?.[0] ?? null
+    setImage(file)
+    if (file) {
+      const url = URL.createObjectURL(file)
+      setImagePreview(url)
+    } else {
+      setImagePreview(null)
+    }
+  }
+
   function resetAll() {
     setStep('details')
     setDetails(EMPTY_DETAILS)
     setImage(null)
+    setImagePreview(null)
     setClassification(EMPTY_CLASS)
     setDepartmentTouched(false)
     setAi(null)
@@ -88,7 +109,6 @@ export default function ReportIssue() {
     setClassification((c) => ({
       ...c,
       category_id: categoryId,
-      // Follow the category's default department until the student picks one.
       department_id: !departmentTouched && categoryId
         ? categoriesById.get(categoryId)?.default_department_id ?? c.department_id
         : c.department_id,
@@ -149,7 +169,7 @@ export default function ReportIssue() {
 
   async function joinExisting(issue) {
     const ok = window.confirm(
-      `Add your report to "${issue.title}"?\n\nYou will be listed as another affected reporter (your identity is not shown to staff). No new issue will be created.`,
+      `Add your report to "${issue.title}"?\n\nYou will be listed as another affected reporter (your identity is kept private from staff). No duplicate issue will be created.`,
     )
     if (!ok) return
     setBusy(true)
@@ -165,105 +185,213 @@ export default function ReportIssue() {
     }
   }
 
-  if (catalogError) return <p className="alert alert-error">{catalogError}</p>
-  if (!catalog) return <p className="muted">Loading…</p>
+  if (catalogError) return <div className="alert alert-error">{catalogError}</div>
+  if (!catalog) return <div className="center-screen muted">Loading categories and departments…</div>
+
+  const stepLabels = ['1. Problem Details', '2. Category & AI', '3. Duplicate Check', '4. Confirmation']
+  const stepKeys = ['details', 'classify', 'duplicates', 'done']
+  const currentStepIndex = stepKeys.indexOf(step)
 
   return (
-    <div className="page narrow">
-      <h1>Report a campus problem</h1>
-      <p className="muted">
-        For broken equipment, electrical faults, leaks and damaged infrastructure.
-      </p>
+    <div className="report-page-container">
+      {/* Top Banner Notice for Emergency */}
+      <div className="emergency-quick-bar">
+        <IconEmergency />
+        <span>
+          Immediate safety risk, fire or electrical shock hazard? Call campus security directly at{' '}
+          <Link to="/emergency"><strong>(555) 0199</strong></Link>.
+        </span>
+      </div>
 
-      <ol className="stepper">
-        {['Describe', 'Category & priority', 'Check duplicates', 'Done'].map((label, i) => {
-          const index = ['details', 'classify', 'duplicates', 'done'].indexOf(step)
+      <div className="page-head-card">
+        <div>
+          <span className="page-eyebrow">Student Reporting</span>
+          <h1>Report Campus Problem</h1>
+          <p className="muted">
+            Report broken equipment, leaks, electrical faults or damaged furniture. AI assists with categorization.
+          </p>
+        </div>
+      </div>
+
+      {/* Modern Stepper */}
+      <div className="stepper-card">
+        {stepLabels.map((label, idx) => {
+          const isDone = idx < currentStepIndex
+          const isCurrent = idx === currentStepIndex
           return (
-            <li key={label} className={i === index ? 'current' : i < index ? 'complete' : ''}>
-              {label}
-            </li>
+            <div
+              key={label}
+              className={`step-bubble ${isCurrent ? 'active' : ''} ${isDone ? 'completed' : ''}`}
+            >
+              <span className="step-circle">{isDone ? '✓' : idx + 1}</span>
+              <span className="step-name">{label}</span>
+            </div>
           )
         })}
-      </ol>
+      </div>
 
-      {error && <p className="alert alert-error">{error}</p>}
+      {error && <div className="alert alert-error">{error}</div>}
 
+      {/* STEP 1: Details */}
       {step === 'details' && (
-        <form className="card form" onSubmit={requestSuggestions}>
+        <form className="card modern-form-card" onSubmit={requestSuggestions}>
+          <div className="form-section-title">
+            <span className="form-number-tag">Step 1</span>
+            <h3>Describe the Physical Issue</h3>
+          </div>
+
           <label className="field">
-            <span>What's the problem?</span>
+            <span className="field-label">Issue Title</span>
             <input
+              className="styled-input"
               value={details.title}
               onChange={(e) => updateDetails('title', e.target.value)}
-              placeholder="e.g. Water leaking from ceiling near lab door"
+              placeholder="e.g. Water leaking from ceiling near lab entrance"
               required
               minLength={3}
               maxLength={150}
             />
           </label>
+
           <label className="field">
-            <span>Details</span>
+            <span className="field-label">Detailed Description</span>
             <textarea
+              className="styled-textarea"
               value={details.description}
               onChange={(e) => updateDetails('description', e.target.value)}
-              placeholder="What did you see, when did it start, how bad is it?"
+              placeholder="What is broken? When did it start? Does it cause flooding, sparks, or block access?"
               required
               minLength={10}
               maxLength={2000}
               rows={5}
             />
-            <small className="muted">{details.description.length}/2000</small>
-          </label>
-          <div className="row">
-            <label className="field">
-              <span>Building</span>
-              <input value={details.building} onChange={(e) => updateDetails('building', e.target.value)} required maxLength={100} placeholder="e.g. Science Block" />
-            </label>
-            <label className="field">
-              <span>Room <em className="muted">(optional)</em></span>
-              <input value={details.room} onChange={(e) => updateDetails('room', e.target.value)} maxLength={50} placeholder="e.g. S-204" />
-            </label>
-          </div>
-          <label className="field">
-            <span>Photo <em className="muted">(optional, JPEG/PNG/WebP, max 5 MB)</em></span>
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setImage(e.target.files?.[0] ?? null)} />
+            <div className="char-count">{details.description.length} / 2000 characters</div>
           </label>
 
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Analysing…' : 'Next: get suggestions'}
-          </button>
+          <div className="row-two-col">
+            <label className="field">
+              <span className="field-label">Campus Building</span>
+              <input
+                className="styled-input"
+                value={details.building}
+                onChange={(e) => updateDetails('building', e.target.value)}
+                required
+                maxLength={100}
+                placeholder="e.g. Science Block B or Central Library"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Room / Hallway <em className="muted">(Optional)</em></span>
+              <input
+                className="styled-input"
+                value={details.room}
+                onChange={(e) => updateDetails('room', e.target.value)}
+                maxLength={50}
+                placeholder="e.g. Room 204 or 2nd floor corridor"
+              />
+            </label>
+          </div>
+
+          <div className="photo-upload-section">
+            <span className="field-label">Attach Photo <em className="muted">(Optional, max 5 MB)</em></span>
+            <div className="photo-upload-box">
+              <input
+                type="file"
+                id="photo-file"
+                className="hidden-file-input"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageChange}
+              />
+              <label htmlFor="photo-file" className="photo-upload-label">
+                <IconCamera className="upload-icon" />
+                <span>{image ? image.name : 'Click or drop a photo of the problem'}</span>
+                <span className="upload-hint">Supports JPEG, PNG, or WebP</span>
+              </label>
+            </div>
+            {imagePreview && (
+              <div className="photo-preview-wrap">
+                <img src={imagePreview} alt="Preview" className="photo-thumbnail" />
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => {
+                    setImage(null)
+                    setImagePreview(null)
+                  }}
+                >
+                  Remove Photo
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions-right">
+            <button type="submit" className="btn btn-primary btn-submit-step" disabled={busy}>
+              {busy ? (
+                <>
+                  <span className="spinner-sm" /> Running AI Triage…
+                </>
+              ) : (
+                <>
+                  <IconSparkles /> Continue to AI Categorization <IconArrowRight />
+                </>
+              )}
+            </button>
+          </div>
         </form>
       )}
 
+      {/* STEP 2: Classification */}
       {step === 'classify' && (
-        <form className="card form" onSubmit={checkDuplicates}>
+        <form className="card modern-form-card" onSubmit={checkDuplicates}>
+          <div className="form-section-title">
+            <span className="form-number-tag">Step 2</span>
+            <h3>Category & Department Review</h3>
+          </div>
+
           {ai?.available ? (
-            <div className="alert alert-info">
-              <strong>AI suggestion.</strong> {ai.suggestion.reason} You can change any of these.
+            <div className="ai-suggestion-box">
+              <div className="ai-badge-row">
+                <span className="ai-pill">
+                  <IconSparkles /> AI Classifier Suggestion
+                </span>
+              </div>
+              <p className="ai-reason-text">{ai.suggestion.reason}</p>
+              <span className="ai-sub-note">You can edit any of these suggestions below if needed.</span>
             </div>
           ) : (
             <div className="alert alert-warn">
-              <strong>Choose manually.</strong> {ai?.reason ?? 'AI suggestions are unavailable.'}
+              <strong>Manual Selection:</strong> {ai?.reason ?? 'AI suggestion service is offline. Please choose below.'}
             </div>
           )}
 
           <label className="field">
-            <span>
-              Category <AiTag ai={ai} field="categoryId" value={classification.category_id} />
-            </span>
-            <select value={classification.category_id} onChange={(e) => chooseCategory(e.target.value)} required>
+            <div className="field-label-with-tag">
+              <span className="field-label">Problem Category</span>
+              <AiTag ai={ai} field="categoryId" value={classification.category_id} />
+            </div>
+            <select
+              className="styled-select"
+              value={classification.category_id}
+              onChange={(e) => chooseCategory(e.target.value)}
+              required
+            >
               <option value="">Select a category</option>
               {catalog.categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </label>
 
           <label className="field">
-            <span>
-              Responsible department <AiTag ai={ai} field="departmentId" value={classification.department_id} />
-            </span>
+            <div className="field-label-with-tag">
+              <span className="field-label">Responsible Department</span>
+              <AiTag ai={ai} field="departmentId" value={classification.department_id} />
+            </div>
             <select
+              className="styled-select"
               value={classification.department_id}
               onChange={(e) => {
                 setDepartmentTouched(true)
@@ -273,18 +401,24 @@ export default function ReportIssue() {
             >
               <option value="">Select a department</option>
               {catalog.departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
           </label>
 
           <fieldset className="field">
-            <legend>
-              Priority <AiTag ai={ai} field="priority" value={classification.priority} />
-            </legend>
-            <div className="segmented">
+            <div className="field-label-with-tag">
+              <legend className="field-label">Urgency & Priority</legend>
+              <AiTag ai={ai} field="priority" value={classification.priority} />
+            </div>
+            <div className="segmented-grid">
               {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                <label key={value} className={classification.priority === value ? `selected priority-${value}` : ''}>
+                <label
+                  key={value}
+                  className={`segmented-chip ${classification.priority === value ? `selected priority-${value}` : ''}`}
+                >
                   <input
                     type="radio"
                     name="priority"
@@ -293,80 +427,132 @@ export default function ReportIssue() {
                     onChange={() => setClassification((c) => ({ ...c, priority: value }))}
                     required
                   />
-                  {label}
+                  <div className="chip-content">
+                    <span className="chip-title">{label} Priority</span>
+                    <span className="chip-desc">
+                      {value === 'high'
+                        ? 'Safety hazard / critical halt (24h SLA)'
+                        : value === 'medium'
+                          ? 'Equipment fault / disrupts work (72h SLA)'
+                          : 'Minor wear & tear / cosmetic (7d SLA)'}
+                    </span>
+                  </div>
                 </label>
               ))}
             </div>
-            <small className="muted">High: safety risk or major disruption. Medium: broken, affects work. Low: minor or cosmetic.</small>
           </fieldset>
 
-          <div className="actions">
-            <button type="button" className="btn btn-ghost" onClick={() => setStep('details')} disabled={busy}>
-              Back
+          <div className="form-actions-between">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setStep('details')}
+              disabled={busy}
+            >
+              ← Back to Details
             </button>
             <button type="submit" className="btn btn-primary" disabled={busy}>
-              {busy ? 'Checking…' : 'Next'}
+              {busy ? (
+                <>
+                  <span className="spinner-sm" /> Checking Duplicates…
+                </>
+              ) : (
+                <>
+                  Check Duplicates & Submit <IconArrowRight />
+                </>
+              )}
             </button>
           </div>
         </form>
       )}
 
+      {/* STEP 3: Duplicates */}
       {step === 'duplicates' && (
-        <div className="card">
-          <h2>Is this already reported?</h2>
+        <div className="card modern-form-card">
+          <div className="form-section-title">
+            <span className="form-number-tag">Step 3</span>
+            <h3>Similar Campus Reports Found</h3>
+          </div>
           <p className="muted">
-            We found similar open reports in {details.building}. If one of them is your problem, add yourself to it.
-            Nothing is merged unless you confirm.
+            We discovered existing open reports in <strong>{details.building}</strong>. If one of these matches your
+            problem, click <strong>"This is my problem"</strong> to boost its priority and join the updates. Your
+            identity remains anonymous.
           </p>
 
           <ul className="dup-list">
             {duplicates.map((d) => (
-              <li key={d.id} className="dup-item">
+              <li key={d.id} className="dup-item-card">
                 <div className="dup-main">
                   <div className="dup-title">
                     <strong>{d.title}</strong> <StatusBadge status={d.status} />
                   </div>
                   <p className="dup-desc">{d.description}</p>
                   <p className="small muted">
-                    {d.room ? `${d.building}, ${d.room}` : d.building} · {d.category_name} · reported {formatDateTime(d.created_at)} ·{' '}
-                    {d.reporter_count} {d.reporter_count === 1 ? 'reporter' : 'reporters'}
+                    {d.room ? `${d.building}, ${d.room}` : d.building} · {d.category_name} · Reported{' '}
+                    {formatDateTime(d.created_at)} · {d.reporter_count}{' '}
+                    {d.reporter_count === 1 ? 'student affected' : 'students affected'}
                   </p>
                 </div>
                 {d.already_joined ? (
-                  <Link className="btn btn-ghost btn-sm" to={`/issues/${d.id}`}>You reported this</Link>
+                  <Link className="btn btn-ghost btn-sm" to={`/issues/${d.id}`}>
+                    Already Joined
+                  </Link>
                 ) : (
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => joinExisting(d)} disabled={busy}>
-                    This is my problem
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => joinExisting(d)}
+                    disabled={busy}
+                  >
+                    <IconUsers /> This is my problem (Join)
                   </button>
                 )}
               </li>
             ))}
           </ul>
 
-          <div className="actions">
-            <button type="button" className="btn btn-ghost" onClick={() => setStep('classify')} disabled={busy}>
-              Back
+          <div className="form-actions-between mt-lg">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setStep('classify')}
+              disabled={busy}
+            >
+              ← Back to Category
             </button>
-            <button type="button" className="btn btn-primary" onClick={submitNew} disabled={busy}>
-              {busy ? 'Submitting…' : 'None of these, submit new report'}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={submitNew}
+              disabled={busy}
+            >
+              {busy ? 'Submitting…' : 'None of these — Submit as new issue'}
             </button>
           </div>
         </div>
       )}
 
+      {/* STEP 4: Done */}
       {step === 'done' && result && (
-        <div className="card center">
-          <h2>{result.joined ? 'Added to existing report' : 'Report submitted'}</h2>
+        <div className="card modern-form-card center-card-content">
+          <div className="success-icon-wrap">
+            <IconCheckCircle />
+          </div>
+          <h2>{result.joined ? 'Successfully Added to Report' : 'Issue Reported Successfully!'}</h2>
           <p className="muted">
             {result.alreadyLinked
-              ? 'You were already linked to this report.'
+              ? 'You are already registered as an affected student on this issue.'
               : result.joined
-                ? 'The department now knows another person is affected. You will see its progress in My reports.'
-                : 'The responsible department has been notified. You can follow its progress in My reports.'}
+                ? 'The assigned department has been notified that another student is affected. You will receive status updates.'
+                : 'The maintenance team has received your ticket and will begin diagnosis according to SLA guidelines.'}
           </p>
-          <div className="actions center">
-            <Link className="btn btn-secondary" to={`/issues/${result.id}`}>View report</Link>
-            <button type="button" className="btn btn-ghost" onClick={resetAll}>Report another problem</button>
+          <div className="actions center mt-lg">
+            <Link className="btn btn-primary" to={`/issues/${result.id}`}>
+              View Issue Status
+            </Link>
+            <button type="button" className="btn btn-ghost" onClick={resetAll}>
+              Report Another Problem
+            </button>
           </div>
         </div>
       )}
@@ -378,8 +564,10 @@ function AiTag({ ai, field, value }) {
   if (!ai?.available) return null
   const suggested = ai.suggestion[field]
   return suggested === value ? (
-    <span className="tag tag-ai">AI suggested</span>
+    <span className="tag-ai-pill">
+      <IconSparkles /> AI Suggested
+    </span>
   ) : (
-    <span className="tag tag-edited">Edited by you</span>
+    <span className="tag-edited-pill">Edited by you</span>
   )
 }

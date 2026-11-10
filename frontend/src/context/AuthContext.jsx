@@ -20,8 +20,12 @@ export function AuthProvider({ children }) {
     let cancelled = false
     api
       .get('/me')
-      .then(({ user: me }) => !cancelled && setProfile({ userId, user: me, error: null }))
-      .catch((err) => !cancelled && setProfile({ userId, user: null, error: err.message }))
+      .then(({ user: me }) => {
+        if (!cancelled) setProfile({ userId, user: me, error: null })
+      })
+      .catch((err) => {
+        if (!cancelled) setProfile({ userId, user: null, error: err.message })
+      })
     return () => {
       cancelled = true
     }
@@ -35,8 +39,24 @@ export function AuthProvider({ children }) {
   const profileError = current.error
   const loading = session === undefined || (Boolean(session) && !user && !profileError)
 
+  // Strict role check: role is either 'staff' (Manager) or 'reporter' (Student)
+  const isStaff = user?.role === 'staff'
+  const isStudent = user?.role === 'reporter'
+  const activeDepartment = user?.departmentName || 'Electrical'
+
   return (
-    <AuthContext.Provider value={{ session, user, loading, profileError, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        loading,
+        profileError,
+        signOut,
+        isStaff,
+        isStudent,
+        activeDepartment,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

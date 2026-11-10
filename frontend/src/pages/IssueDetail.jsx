@@ -5,6 +5,14 @@ import { NEXT_STATUSES, PRIORITY_LABELS, STATUS_LABELS } from '../lib/constants.
 import { formatDateTime, location, relativeTime } from '../lib/format.js'
 import { OverdueBadge, PriorityBadge, StatusBadge } from '../components/Badges.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import {
+  IconCheckCircle,
+  IconClock,
+  IconEmergency,
+  IconShield,
+  IconSparkles,
+  IconUsers,
+} from '../components/Icons.jsx'
 
 export default function IssueDetail() {
   const { id } = useParams()
@@ -22,65 +30,110 @@ export default function IssueDetail() {
     load()
   }, [load])
 
-  if (error) return <p className="alert alert-error">{error}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (error) return <div className="alert alert-error">{error}</div>
+  if (!data) return <div className="center-screen muted">Loading issue details…</div>
 
   const { issue, history } = data
 
   return (
-    <div className="page">
-      <Link to={isStaff ? '/staff' : '/my-reports'} className="back-link">
-        ← {isStaff ? 'Dashboard' : 'My reports'}
+    <div className="page-container">
+      <Link to={isStaff ? '/staff' : '/my-reports'} className="back-nav-btn">
+        ← Back to {isStaff ? 'Department Dashboard' : 'My Reports'}
       </Link>
 
-      <div className="detail-grid">
-        <section className="card">
-          <div className="detail-badges">
+      <div className="detail-layout-grid">
+        {/* Main Details Column */}
+        <section className="card modern-detail-card">
+          <div className="detail-badges-row">
             <StatusBadge status={issue.status} />
             <PriorityBadge priority={issue.priority} />
             {issue.is_overdue && <OverdueBadge />}
           </div>
-          <h1 className="detail-title">{issue.title}</h1>
-          <p className="muted">{location(issue)}</p>
-          <p className="detail-desc">{issue.description}</p>
+
+          <h1 className="detail-main-title">{issue.title}</h1>
+          <div className="detail-location-pill">
+            <span>📍 {location(issue)}</span>
+          </div>
+
+          <div className="detail-description-box">
+            <p className="detail-desc-text">{issue.description}</p>
+          </div>
 
           {issue.image_url && (
-            <a href={issue.image_url} target="_blank" rel="noreferrer">
-              <img src={issue.image_url} alt="Photo of the reported problem" className="detail-image" />
-            </a>
+            <div className="detail-photo-container">
+              <span className="photo-label">Attached Photo:</span>
+              <a href={issue.image_url} target="_blank" rel="noreferrer" className="photo-link-wrapper">
+                <img src={issue.image_url} alt="Problem on campus" className="detail-main-image" />
+                <span className="zoom-hint">Click photo to expand ↗</span>
+              </a>
+            </div>
           )}
 
-          <dl className="facts">
-            <div><dt>Category</dt><dd>{issue.category_name}</dd></div>
-            <div><dt>Department</dt><dd>{issue.department_name}</dd></div>
-            <div><dt>Reported</dt><dd>{formatDateTime(issue.created_at)}</dd></div>
-            <div><dt>People affected</dt><dd>{issue.reporter_count}</dd></div>
+          {/* Facts Grid */}
+          <div className="facts-grid">
+            <div className="fact-item">
+              <span className="fact-label">Category</span>
+              <span className="fact-value">{issue.category_name}</span>
+            </div>
+            <div className="fact-item">
+              <span className="fact-label">Assigned Department</span>
+              <span className="fact-value">{issue.department_name}</span>
+            </div>
+            <div className="fact-item">
+              <span className="fact-label">First Reported</span>
+              <span className="fact-value">{formatDateTime(issue.created_at)}</span>
+            </div>
+            <div className="fact-item">
+              <span className="fact-label">Students Affected</span>
+              <span className="fact-value">
+                <IconUsers /> {issue.reporter_count} {issue.reporter_count === 1 ? 'student' : 'students'}
+              </span>
+            </div>
             {issue.status !== 'closed' && issue.status !== 'resolved' && (
-              <div>
-                <dt>Target</dt>
-                <dd className={issue.is_overdue ? 'text-danger' : ''}>
-                  {formatDateTime(issue.due_at)} ({relativeTime(issue.due_at)})
-                </dd>
+              <div className="fact-item">
+                <span className="fact-label">Resolution SLA Target</span>
+                <span className={`fact-value ${issue.is_overdue ? 'text-danger font-bold' : ''}`}>
+                  <IconClock /> {formatDateTime(issue.due_at)} ({relativeTime(issue.due_at)})
+                </span>
               </div>
             )}
-            {issue.resolved_at && <div><dt>Resolved</dt><dd>{formatDateTime(issue.resolved_at)}</dd></div>}
+            {issue.resolved_at && (
+              <div className="fact-item">
+                <span className="fact-label">Marked Resolved</span>
+                <span className="fact-value text-ok">
+                  <IconCheckCircle /> {formatDateTime(issue.resolved_at)}
+                </span>
+              </div>
+            )}
             {isStaff && (
-              <div>
-                <dt>AI triage</dt>
-                <dd>{issue.ai_used ? <AiSummary issue={issue} /> : 'Not used (entered manually)'}</dd>
+              <div className="fact-item full-width">
+                <span className="fact-label">AI Triage Audit</span>
+                <span className="fact-value">
+                  {issue.ai_used ? (
+                    <AiSummary issue={issue} />
+                  ) : (
+                    <span className="muted">Not used (manual student submission)</span>
+                  )}
+                </span>
               </div>
             )}
-          </dl>
+          </div>
 
+          {/* Anonymized Reporter Notes for Staff */}
           {isStaff && data.reporter_notes?.length > 0 && (
-            <div className="notes">
-              <h3>Notes from reporters</h3>
-              <p className="small muted">Reporter identities are kept private.</p>
-              <ul>
+            <div className="reporter-notes-section">
+              <div className="notes-header">
+                <IconUsers />
+                <div>
+                  <h3>Notes from Affected Students</h3>
+                  <p className="small muted">Student identities are cryptographically private and anonymous.</p>
+                </div>
+              </div>
+              <ul className="notes-list">
                 {data.reporter_notes.map((n, i) => (
-                  <li key={i}>
-                    <p>{n.note}</p>
-                    <span className="small muted">{formatDateTime(n.joined_at)}</span>
+                  <li key={i} className="note-bubble">
+                    <p className="note-text">{n.note}</p>
+                    <span className="note-date">Submitted {formatDateTime(n.joined_at)}</span>
                   </li>
                 ))}
               </ul>
@@ -88,37 +141,61 @@ export default function IssueDetail() {
           )}
 
           {!isStaff && data.my_link && (
-            <p className="small muted">
-              {data.my_link.is_original ? 'You reported this issue' : 'You joined this report'} on{' '}
-              {formatDateTime(data.my_link.joined_at)}.
-            </p>
+            <div className="my-link-notice">
+              {data.my_link.is_original
+                ? '⭐ You are the original reporter of this issue.'
+                : '🤝 You joined this report as an affected student.'}{' '}
+              Recorded on {formatDateTime(data.my_link.joined_at)}.
+            </div>
           )}
         </section>
 
-        <aside className="stack">
-          {/* Keyed by status so the form resets after each change. */}
+        {/* Right Action & Timeline Column */}
+        <aside className="detail-sidebar-column">
+          {/* Staff Status Transition Controls */}
           {isStaff && <StatusControls key={issue.status} issue={issue} onChanged={load} />}
 
-          <section className="card">
-            <h2>Progress</h2>
-            <ol className="timeline">
-              <li>
-                <span className="timeline-status">Reported</span>
-                <span className="small muted">{formatDateTime(issue.created_at)}</span>
+          {/* Progress Timeline */}
+          <section className="card modern-detail-card">
+            <h3>Lifecycle Timeline</h3>
+            <ol className="timeline-modern">
+              <li className="timeline-step">
+                <div className="timeline-marker completed" />
+                <div className="timeline-info">
+                  <span className="timeline-title">Issue Reported</span>
+                  <span className="small muted">{formatDateTime(issue.created_at)}</span>
+                </div>
               </li>
               {history.map((h) => (
-                <li key={h.id}>
-                  <span className="timeline-status">
-                    {STATUS_LABELS[h.old_status] ?? '—'} → {STATUS_LABELS[h.new_status]}
-                  </span>
-                  <span className="small muted">
-                    {formatDateTime(h.changed_at)} · {h.changed_by}
-                  </span>
-                  {h.note && <p className="timeline-note">{h.note}</p>}
+                <li key={h.id} className="timeline-step">
+                  <div className="timeline-marker in-progress" />
+                  <div className="timeline-info">
+                    <span className="timeline-title">
+                      {STATUS_LABELS[h.old_status] ?? '—'} → {STATUS_LABELS[h.new_status]}
+                    </span>
+                    <span className="small muted">
+                      {formatDateTime(h.changed_at)} · {h.changed_by}
+                    </span>
+                    {h.note && <div className="timeline-note-box">{h.note}</div>}
+                  </div>
                 </li>
               ))}
             </ol>
           </section>
+
+          {/* Emergency Escalation Quick Link */}
+          <div className="card emergency-mini-card">
+            <div className="emergency-mini-header">
+              <IconEmergency />
+              <div>
+                <strong>Need immediate safety backup?</strong>
+                <p>Call campus security dispatch</p>
+              </div>
+            </div>
+            <Link to="/emergency" className="btn btn-sm btn-ghost">
+              Security Protocol →
+            </Link>
+          </div>
         </aside>
       </div>
     </div>
@@ -130,7 +207,12 @@ function AiSummary({ issue }) {
   if (issue.ai_category_id !== issue.category_id) changed.push('category')
   if (issue.ai_department_id !== issue.department_id) changed.push('department')
   if (issue.ai_priority !== issue.priority) changed.push(`priority (AI said ${PRIORITY_LABELS[issue.ai_priority]})`)
-  return changed.length ? `Used; student changed ${changed.join(', ')}` : 'Used; student kept the suggestion'
+  return (
+    <span className="ai-summary-pill">
+      <IconSparkles />
+      {changed.length ? `AI applied; modified ${changed.join(', ')}` : 'AI suggestions verified & accepted'}
+    </span>
+  )
 }
 
 function StatusControls({ issue, onChanged }) {
@@ -144,9 +226,12 @@ function StatusControls({ issue, onChanged }) {
 
   if (options.length === 0) {
     return (
-      <section className="card">
-        <h2>Status</h2>
-        <p className="muted">This issue is closed. No further changes.</p>
+      <section className="card modern-detail-card">
+        <h3>Status Management</h3>
+        <div className="status-closed-message">
+          <IconCheckCircle />
+          <p>This issue is marked <strong>Closed</strong>. The fixed workflow is finished.</p>
+        </div>
       </section>
     )
   }
@@ -166,24 +251,62 @@ function StatusControls({ issue, onChanged }) {
   }
 
   return (
-    <section className="card">
-      <h2>Update status</h2>
-      <form className="form" onSubmit={submit}>
-        <div className="segmented vertical">
+    <section className="card modern-detail-card">
+      <div className="staff-control-header">
+        <IconShield />
+        <h3>Update Workflow Status</h3>
+      </div>
+      <p className="small muted">Change status in accordance with department maintenance policy.</p>
+
+      <form className="form mt-md" onSubmit={submit}>
+        <div className="workflow-radio-group">
           {options.map((o) => (
-            <label key={o.status} className={target === o.status ? 'selected' : ''}>
-              <input type="radio" name="next" value={o.status} checked={target === o.status} onChange={() => setTarget(o.status)} />
-              {o.label} <span className="muted">→ {STATUS_LABELS[o.status]}</span>
+            <label
+              key={o.status}
+              className={`workflow-radio-pill ${target === o.status ? 'selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="next"
+                value={o.status}
+                checked={target === o.status}
+                onChange={() => setTarget(o.status)}
+              />
+              <div className="radio-text">
+                <span className="radio-label">{o.label}</span>
+                <span className="radio-target">Target: {STATUS_LABELS[o.status]}</span>
+              </div>
             </label>
           ))}
         </div>
-        <label className="field">
-          <span>Note {selected?.noteRequired ? '(required)' : '(optional, visible to reporters)'}</span>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={1000} required={selected?.noteRequired} />
+
+        <label className="field mt-md">
+          <span className="field-label">
+            Staff Note {selected?.noteRequired ? <span className="text-danger">* (Required)</span> : '(Optional for reporters)'}
+          </span>
+          <textarea
+            className="styled-textarea"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            maxLength={1000}
+            required={selected?.noteRequired}
+            placeholder={
+              selected?.noteRequired
+                ? 'Explain why this issue is being closed without repair or reopened...'
+                : 'Add a status note for the student to read...'
+            }
+          />
         </label>
-        {error && <p className="alert alert-error">{error}</p>}
-        <button type="submit" className="btn btn-primary btn-block" disabled={busy || !target}>
-          {busy ? 'Saving…' : selected?.label ?? 'Update'}
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <button
+          type="submit"
+          className="btn btn-primary btn-block mt-md"
+          disabled={busy || !target}
+        >
+          {busy ? 'Updating Status…' : `Confirm: ${selected?.label ?? 'Update'}`}
         </button>
       </form>
     </section>
