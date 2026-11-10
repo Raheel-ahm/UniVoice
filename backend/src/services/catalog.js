@@ -1,5 +1,6 @@
 import { db } from '../supabase.js'
 import { must } from '../lib/errors.js'
+import { config } from '../config.js'
 
 const TTL_MS = 5 * 60 * 1000
 let cached = null
@@ -13,7 +14,15 @@ export async function getCatalog() {
     db.from('departments').select('id, name').order('name').then(must),
     db.from('categories').select('id, name, default_department_id').order('name').then(must),
   ])
-  cached = { departments, categories }
+  cached = {
+    departments,
+    categories,
+    emergency: {
+      phone: config.campusSecurityPhone,
+      message: 'For active safety hazards, gas leaks, electrical fires, or life-threatening situations, contact Campus Security directly.',
+      screen_url: '/emergency',
+    },
+  }
   cachedAt = Date.now()
   return cached
 }
