@@ -12,6 +12,7 @@ import {
   IconShield,
   IconSparkles,
   IconUsers,
+  IconWrench,
 } from '../components/Icons.jsx'
 
 export default function IssueDetail() {
