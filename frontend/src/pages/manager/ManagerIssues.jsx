@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useManager } from '../../context/ManagerContext.jsx'
+import { api } from '../../lib/api.js'
 import { formatDateTime, location, relativeTime } from '../../lib/format.js'
 import { OverdueBadge, PriorityBadge, StatusBadge } from '../../components/Badges.jsx'
 import {
@@ -18,10 +19,16 @@ export default function ManagerIssues() {
   const [searchParams] = useSearchParams()
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all')
   const [priorityFilter, setPriorityFilter] = useState('all')
+  const [selectedDept, setSelectedDept] = useState('all')
+  const [departments, setDepartments] = useState([])
   const [search, setSearch] = useState(searchParams.get('q') || '')
   const [actionLoading, setActionLoading] = useState(null)
   const [quickNoteModal, setQuickNoteModal] = useState(null) // { issueId, nextStatus }
   const [noteInput, setNoteInput] = useState('')
+
+  useEffect(() => {
+    api.get('/meta').then((d) => setDepartments(d.departments || [])).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const s = searchParams.get('status')
@@ -32,6 +39,7 @@ export default function ManagerIssues() {
 
   const filteredIssues = useMemo(() => {
     return issues.filter((i) => {
+      if (selectedDept !== 'all' && i.department_id !== Number(selectedDept)) return false
       if (statusFilter !== 'all') {
         if (statusFilter === 'overdue' && !i.is_overdue) return false
         if (statusFilter === 'active' && !(i.status === 'open' || i.status === 'in_progress')) return false
@@ -40,14 +48,14 @@ export default function ManagerIssues() {
       if (priorityFilter !== 'all' && i.priority !== priorityFilter) return false
       if (search.trim()) {
         const q = search.trim().toLowerCase()
-        const match = [i.title, i.building, i.room, i.category_name, i.description].some((field) =>
+        const match = [i.title, i.building, i.room, i.category_name, i.department_name, i.description].some((field) =>
           field?.toLowerCase().includes(q),
         )
         if (!match) return false
       }
       return true
     })
-  }, [issues, statusFilter, priorityFilter, search])
+  }, [issues, selectedDept, statusFilter, priorityFilter, search])
 
   async function handleQuickStatus(issueId, nextStatus, requiresNote = false) {
     if (requiresNote) {
@@ -65,9 +73,13 @@ export default function ManagerIssues() {
 
   async function confirmModalStatus() {
     if (!quickNoteModal) return
+    if (!noteInput.trim() || noteInput.trim().length < 5) {
+      alert('Please enter an explanatory note of at least 5 characters.')
+      return
+    }
     setActionLoading(quickNoteModal.issueId)
     try {
-      await updateStatus(quickNoteModal.issueId, quickNoteModal.nextStatus, noteInput)
+      await updateStatus(quickNoteModal.issueId, quickNoteModal.nextStatus, noteInput.trim())
       setQuickNoteModal(null)
       setNoteInput('')
     } finally {
@@ -149,15 +161,36 @@ export default function ManagerIssues() {
           </button>
         </div>
 
-        <div className="search-input-box">
-          <IconSearch className="search-icon-inside" />
-          <input
-            type="search"
-            className="dashboard-search-field"
-            placeholder="Search by title, room, building…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="toolbar-controls-right">
+          {departments.length > 0 && (
+            <select
+              className="dept-filter-select"
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              title="Filter by Campus Department"
+            >
+              <option value="all">🏢 All Departments ({issues.length})</option>
+              {departments.map((dept) => {
+                const count = issues.filter((i) => i.department_id === dept.id).length
+                return (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({count})
+                  </option>
+                )
+              })}
+            </select>
+          )}
+
+          <div className="search-input-box">
+            <IconSearch className="search-icon-inside" />
+            <input
+              type="search"
+              className="dashboard-search-field"
+              placeholder="Search student reports, rooms, buildings…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
@@ -208,6 +241,7 @@ export default function ManagerIssues() {
                 <div className="ticket-meta-info">
                   <span>📍 {location(issue)}</span>
                   <span>📁 {issue.category_name}</span>
+                  {issue.department_name && <span className="dept-tag-pill">🏢 {issue.department_name}</span>}
                   <span>
                     <IconUsers /> {issue.reporter_count}{' '}
                     {issue.reporter_count === 1 ? 'affected student' : 'affected students'}
