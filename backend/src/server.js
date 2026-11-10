@@ -17,8 +17,21 @@ import { staffRouter } from './routes/staff.js'
 
 const app = express()
 app.disable('x-powered-by')
-app.use(cors({ origin: config.frontendOrigin }))
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+)
 app.use(express.json({ limit: '100kb' }))
+
+// Normalize routes if invoked in serverless with or without /api
+app.use((req, _res, next) => {
+  if (!req.url.startsWith('/api') && !req.url.startsWith('/emergency') && !req.url.startsWith('/health')) {
+    req.url = '/api' + req.url
+  }
+  next()
+})
 
 // Public health and emergency screens/endpoints (no sign-in required)
 app.get('/api/health', (_req, res) => {
@@ -112,21 +125,26 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Something went wrong' })
 })
 
-app.listen(config.port, (error) => {
-  if (error) {
-    console.error(
-      error.code === 'EADDRINUSE'
-        ? `Port ${config.port} is already in use. Is the backend already running in another terminal?`
-        : error,
-    )
-    process.exit(1)
-  }
-  console.log(`UniVoice API listening on http://localhost:${config.port}`)
-  if (config.geminiConfigured) {
-    console.log(`Gemini AI configured (model: ${config.geminiModel}, status: ${config.enableAi ? 'enabled' : 'disabled'}).`)
-  } else if (config.anthropicConfigured) {
-    console.log('Anthropic AI configured.')
-  } else {
-    console.log('No AI key set: suggestions disabled, manual entry only.')
-  }
-})
+if (!process.env.VERCEL) {
+  app.listen(config.port, (error) => {
+    if (error) {
+      console.error(
+        error.code === 'EADDRINUSE'
+          ? `Port ${config.port} is already in use. Is the backend already running in another terminal?`
+          : error,
+      )
+      process.exit(1)
+    }
+    console.log(`UniVoice API listening on http://localhost:${config.port}`)
+    if (config.geminiConfigured) {
+      console.log(`Gemini AI configured (model: ${config.geminiModel}, status: ${config.enableAi ? 'enabled' : 'disabled'}).`)
+    } else if (config.anthropicConfigured) {
+      console.log('Anthropic AI configured.')
+    } else {
+      console.log('No AI key set: suggestions disabled, manual entry only.')
+    }
+  })
+}
+
+export { app }
+export default app

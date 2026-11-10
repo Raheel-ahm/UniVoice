@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { db } from '../supabase.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = path.resolve(__dirname, '../../data')
+const isVercel = Boolean(process.env.VERCEL)
+const DATA_DIR = isVercel
+  ? path.join('/tmp', 'univoice-data')
+  : path.resolve(__dirname, '../../data')
 const ASSIGNMENTS_FILE = path.join(DATA_DIR, 'assignments.json')
 
 export const TECHNICIANS = [
