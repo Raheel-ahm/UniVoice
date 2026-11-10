@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { api } from '../lib/api.js'
+import { IconGraduationCap, IconShield } from '../components/Icons.jsx'
 
 export default function Login() {
-  const [mode, setMode] = useState('signin')
+  const [targetRole, setTargetRole] = useState('student') // 'student' | 'manager'
+  const [studentMode, setStudentMode] = useState('signin') // 'signin' | 'signup'
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -11,80 +13,231 @@ export default function Login() {
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
 
+  const isManager = targetRole === 'manager'
+
   async function handleSubmit(event) {
     event.preventDefault()
     setBusy(true)
     setError(null)
     setInfo(null)
 
-    if (mode === 'signin') {
+    if (isManager || studentMode === 'signin') {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-      if (err) setError(err.message)
-    } else {
-      // The API creates a confirmed account, then we sign in right away.
+      if (err) {
+        setError(err.message)
+        setBusy(false)
+        return
+      }
+
+      // Check role verification against targeted portal
       try {
-        await api.post('/auth/signup', { full_name: fullName, email, password })
+        const { user: profile } = await api.get('/me')
+        if (isManager && profile.role !== 'staff') {
+          await supabase.auth.signOut()
+          setError('Access Denied: This account has Student permissions. You cannot log into the Department Manager Portal.')
+          setBusy(false)
+          return
+        }
+      } catch (profileErr) {
+        console.error('Profile check error:', profileErr)
+      }
+    } else {
+      // Student Signup
+      try {
+        await api.post('/auth/signup', {
+          full_name: fullName,
+          email,
+          password,
+        })
         const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-        if (err) setError(err.message)
+        if (err) {
+          setError(err.message)
+          setBusy(false)
+          return
+        }
       } catch (err) {
         setError(err.message)
+        setBusy(false)
+        return
       }
     }
     setBusy(false)
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="brand brand-lg">
-          <span className="brand-mark" aria-hidden="true">U</span>
-          UniVoice
-        </div>
-        <p className="muted">Report broken equipment, electrical faults, leaks and damage around campus.</p>
+    <div className={`auth-fullscreen-wrap ${isManager ? 'auth-manager-theme' : 'auth-student-theme'}`}>
+      {/* Background glowing violet shapes */}
+      <div className="auth-glow-orb orb-1" />
+      <div className="auth-glow-orb orb-2" />
 
-        <div className="tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>
-            Sign in
+      <div className="auth-card-modern">
+        {/* Role Selection Tabs */}
+        <div className="role-switch-container">
+          <button
+            type="button"
+            className={`role-select-box ${targetRole === 'student' ? 'active' : ''}`}
+            onClick={() => {
+              setTargetRole('student')
+              setError(null)
+              setEmail('')
+              setPassword('')
+            }}
+          >
+            <div className="role-icon-wrap student">
+              <IconGraduationCap />
+            </div>
+            <div className="role-box-text">
+              <strong>Student Portal</strong>
+              <span>Report issues & track status</span>
+            </div>
           </button>
-          <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>
-            Create account
+
+          <button
+            type="button"
+            className={`role-select-box ${targetRole === 'manager' ? 'active' : ''}`}
+            onClick={() => {
+              setTargetRole('manager')
+              setError(null)
+              setEmail('')
+              setPassword('')
+            }}
+          >
+            <div className="role-icon-wrap manager">
+              <IconShield />
+            </div>
+            <div className="role-box-text">
+              <strong>Manager Portal</strong>
+              <span>Restricted staff access</span>
+            </div>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="form">
-          {mode === 'signup' && (
+        {/* Top Brand Logo */}
+        <div className="auth-brand-center">
+          <div className={`auth-logo-box ${isManager ? 'manager-logo-bg' : ''}`}>
+            {isManager ? (
+              <IconShield className="auth-logo-svg" />
+            ) : (
+              <IconGraduationCap className="auth-logo-svg" />
+            )}
+          </div>
+          <h1 className="auth-app-title">UniVoice</h1>
+          <span className="auth-portal-badge">
+            {isManager ? 'Department Manager Portal' : 'Student Maintenance Portal'}
+          </span>
+        </div>
+
+        <p className="auth-tagline">
+          {isManager
+            ? 'Authorized personnel only. Department operations, SLA auto-escalation & technician triage.'
+            : 'Report campus physical faults, water leaks, and broken facilities with AI assistance.'}
+        </p>
+
+        {/* Action Tabs: ONLY shown for Student Portal */}
+        {!isManager && (
+          <div className="auth-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={studentMode === 'signin'}
+              className={`auth-tab ${studentMode === 'signin' ? 'active' : ''}`}
+              onClick={() => {
+                setStudentMode('signin')
+                setError(null)
+              }}
+            >
+              Sign In as Student
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={studentMode === 'signup'}
+              className={`auth-tab ${studentMode === 'signup' ? 'active' : ''}`}
+              onClick={() => {
+                setStudentMode('signup')
+                setError(null)
+              }}
+            >
+              Create Student Account
+            </button>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="auth-form-body">
+          {!isManager && studentMode === 'signup' && (
             <label className="field">
-              <span>Full name</span>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} required maxLength={100} autoComplete="name" />
+              <span className="field-label">Full Name</span>
+              <input
+                className="styled-input"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="e.g. Alex Morgan"
+                required
+                maxLength={100}
+                autoComplete="name"
+              />
             </label>
           )}
+
           <label className="field">
-            <span>Email</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-          </label>
-          <label className="field">
-            <span>Password</span>
+            <span className="field-label">
+              {isManager ? 'Manager Campus Email' : 'Student Email'}
+            </span>
             <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              type="email"
+              className="styled-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={isManager ? 'manager@campus.edu' : 'student@campus.edu'}
               required
-              minLength={8}
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              autoComplete="email"
             />
           </label>
 
-          {error && <p className="alert alert-error">{error}</p>}
-          {info && <p className="alert alert-info">{info}</p>}
+          <label className="field">
+            <span className="field-label">Password</span>
+            <input
+              type="password"
+              className="styled-input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              minLength={8}
+              autoComplete={!isManager && studentMode === 'signup' ? 'new-password' : 'current-password'}
+            />
+          </label>
 
-          <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          {error && <div className="alert alert-error">{error}</div>}
+          {info && <div className="alert alert-info">{info}</div>}
+
+          <button
+            type="submit"
+            className={`btn btn-primary btn-block btn-auth-submit ${isManager ? 'btn-manager-gradient' : ''}`}
+            disabled={busy}
+          >
+            {busy ? (
+              <span className="spinner-sm" />
+            ) : isManager ? (
+              'Sign In to Department Manager Portal'
+            ) : studentMode === 'signin' ? (
+              'Sign In as Student'
+            ) : (
+              'Register Student Account'
+            )}
           </button>
         </form>
 
-        <p className="small muted">
-          New accounts are student reporter accounts. Staff access is granted by an administrator.
-        </p>
+        <div className="auth-roles-explainer">
+          <div className="role-note-item">
+            {isManager ? <IconShield /> : <IconGraduationCap />}
+            <span>
+              {isManager
+                ? 'Manager registration is closed to the public. Facilities supervisors sign in with administrative credentials.'
+                : 'Student accounts have reporter access to submit new complaints and track repair status.'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
