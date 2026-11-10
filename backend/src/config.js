@@ -22,6 +22,7 @@ export const config = {
   supabaseServiceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
   anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
   anthropicModel: process.env.ANTHROPIC_MODEL ?? 'claude-opus-5-5',
+  campusSecurityPhone: process.env.CAMPUS_SECURITY_PHONE || 'ext. 2222 or (555) 019-9111',
   suggestionSecret,
   imageBucket: 'issue-images',
   maxImageBytes: 5 * 1024 * 1024,
