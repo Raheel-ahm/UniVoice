@@ -40,3 +40,6 @@ id_rsa
 id_ed25519
 serviceAccountKey*.json
 credentials.json
+
+# Local test logins
+TEST_ACCOUNTS.md

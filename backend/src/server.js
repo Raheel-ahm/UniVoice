@@ -11,6 +11,7 @@ import { requireAuth, requireRole } from './middleware/auth.js'
 import { getCatalog } from './services/catalog.js'
 import { classifyIssue } from './services/classifier.js'
 import { authRouter } from './routes/auth.js'
+import { emergencyRouter } from './routes/emergency.js'
 import { issuesRouter } from './routes/issues.js'
 import { staffRouter } from './routes/staff.js'
 
@@ -19,9 +20,13 @@ app.disable('x-powered-by')
 app.use(cors({ origin: config.frontendOrigin }))
 app.use(express.json({ limit: '100kb' }))
 
+// Public health and emergency screens/endpoints (no sign-in required)
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ai: config.anthropicConfigured })
 })
+
+app.use('/emergency', emergencyRouter)
+app.use('/api/emergency', emergencyRouter)
 
 app.use('/api/auth', authRouter)
 

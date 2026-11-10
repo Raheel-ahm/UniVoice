@@ -169,6 +169,7 @@ create policy issues_read on public.issues
 
 -- Reporters see only their own link rows. Staff get nothing here, so reporter
 -- identities never reach them.
+drop policy if exists "reporter links visibility" on public.issue_reporters; -- older policy that let staff see reporter ids
 drop policy if exists issue_reporters_read_own on public.issue_reporters;
 create policy issue_reporters_read_own on public.issue_reporters
   for select to authenticated using (reporter_id = auth.uid());
