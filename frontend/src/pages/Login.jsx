@@ -237,7 +237,7 @@ export default function Login() {
               className="styled-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={isManager ? 'manager@campus.edu' : 'student@campus.edu'}
+              placeholder={isManager ? '' : 'student@campus.edu'}
               required
               autoComplete="email"
             />
