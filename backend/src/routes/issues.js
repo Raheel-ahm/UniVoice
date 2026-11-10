@@ -7,6 +7,7 @@ import { requireRole } from '../middleware/auth.js'
 import { rateLimit } from '../lib/rateLimit.js'
 import { readSuggestionToken } from '../lib/suggestionToken.js'
 import { imageUpload, storeImage, removeImage, signedImageUrl } from '../services/images.js'
+import { getAssignment } from '../services/assignments.js'
 
 export const issuesRouter = Router()
 
@@ -161,9 +162,7 @@ issuesRouter.get('/:id', async (req, res) => {
 
   const isStaff = req.user.role === 'staff'
   let myLink = null
-  if (isStaff) {
-    if (row.department_id !== req.user.departmentId) throw new HttpError(404, 'Issue not found')
-  } else {
+  if (!isStaff) {
     myLink = must(
       await db
         .from('issue_reporters')
@@ -191,8 +190,17 @@ issuesRouter.get('/:id', async (req, res) => {
     changed_by: isStaff ? (h.profiles?.full_name ?? 'Staff') : 'Maintenance staff',
   }))
 
+  const assignment = getAssignment(issueId)
+
   const result = {
-    issue: { ...toIssueDto(row), image_url: await signedImageUrl(row.image_path) },
+    issue: {
+      ...toIssueDto(row),
+      image_url: await signedImageUrl(row.image_path),
+      assigned_technician: assignment?.technician_name ?? null,
+      assigned_technician_id: assignment?.technician_id ?? null,
+      assigned_at: assignment?.assigned_at ?? null,
+      assignment_note: assignment?.note ?? null,
+    },
     history,
   }
 

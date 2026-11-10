@@ -15,16 +15,25 @@ import {
 } from '../../components/Icons.jsx'
 
 export default function ManagerIssues() {
-  const { departmentName, issues, updateStatus } = useManager()
+  const { departmentName, issues, updateStatus, technicians, assignTechnician } = useManager()
   const [searchParams] = useSearchParams()
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [selectedDept, setSelectedDept] = useState('all')
+  const [techFilter, setTechFilter] = useState('all') // 'all' | 'unassigned' | 'assigned' | techId
   const [departments, setDepartments] = useState([])
   const [search, setSearch] = useState(searchParams.get('q') || '')
   const [actionLoading, setActionLoading] = useState(null)
   const [quickNoteModal, setQuickNoteModal] = useState(null) // { issueId, nextStatus }
   const [noteInput, setNoteInput] = useState('')
+  const [assignModal, setAssignModal] = useState(null) // { issue }
+  const [selectedTechId, setSelectedTechId] = useState('')
+  const [assignNote, setAssignNote] = useState('')
+  const [feedbackToast, setFeedbackToast] = useState(null)
+
+  const selectedTech = useMemo(() => {
+    return technicians.find((t) => t.id === selectedTechId) || technicians[0] || null
+  }, [technicians, selectedTechId])
 
   useEffect(() => {
     api.get('/meta').then((d) => setDepartments(d.departments || [])).catch(() => {})
@@ -46,16 +55,25 @@ export default function ManagerIssues() {
         if (statusFilter !== 'overdue' && statusFilter !== 'active' && i.status !== statusFilter) return false
       }
       if (priorityFilter !== 'all' && i.priority !== priorityFilter) return false
+      if (techFilter === 'unassigned' && i.assigned_technician) return false
+      if (techFilter === 'assigned' && !i.assigned_technician) return false
+      if (techFilter !== 'all' && techFilter !== 'unassigned' && techFilter !== 'assigned' && i.assigned_technician_id !== techFilter) return false
       if (search.trim()) {
         const q = search.trim().toLowerCase()
-        const match = [i.title, i.building, i.room, i.category_name, i.department_name, i.description].some((field) =>
-          field?.toLowerCase().includes(q),
-        )
+        const match = [
+          i.title,
+          i.building,
+          i.room,
+          i.category_name,
+          i.department_name,
+          i.description,
+          i.assigned_technician,
+        ].some((field) => field?.toLowerCase().includes(q))
         if (!match) return false
       }
       return true
     })
-  }, [issues, selectedDept, statusFilter, priorityFilter, search])
+  }, [issues, selectedDept, statusFilter, priorityFilter, techFilter, search])
 
   async function handleQuickStatus(issueId, nextStatus, requiresNote = false) {
     if (requiresNote) {
@@ -82,6 +100,29 @@ export default function ManagerIssues() {
       await updateStatus(quickNoteModal.issueId, quickNoteModal.nextStatus, noteInput.trim())
       setQuickNoteModal(null)
       setNoteInput('')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  function handleOpenAssignModal(issue) {
+    setAssignModal({ issue })
+    setSelectedTechId(issue.assigned_technician_id || technicians[0]?.id || 't-1')
+    setAssignNote('')
+  }
+
+  async function confirmAssignment() {
+    if (!assignModal || !selectedTechId) return
+    const tech = technicians.find((t) => t.id === selectedTechId) || { id: selectedTechId, name: 'Technician' }
+    setActionLoading(assignModal.issue.id)
+    try {
+      await assignTechnician(assignModal.issue.id, tech.id, tech.name, assignNote.trim())
+      setFeedbackToast(`Assigned "${assignModal.issue.title}" to ${tech.name}`)
+      setTimeout(() => setFeedbackToast(null), 4000)
+      setAssignModal(null)
+      setAssignNote('')
+    } catch (err) {
+      alert(`Assignment failed: ${err.message}`)
     } finally {
       setActionLoading(null)
     }
@@ -181,6 +222,31 @@ export default function ManagerIssues() {
             </select>
           )}
 
+          <select
+            className="tech-filter-select"
+            value={techFilter}
+            onChange={(e) => setTechFilter(e.target.value)}
+            title="Filter by Technical Team Assignment"
+          >
+            <option value="all">👷 All Technical Assignments</option>
+            <option value="unassigned">
+              ⏳ Unassigned Only ({issues.filter((i) => !i.assigned_technician && (i.status === 'open' || i.status === 'in_progress')).length})
+            </option>
+            <option value="assigned">
+              ✓ Assigned to Team ({issues.filter((i) => Boolean(i.assigned_technician)).length})
+            </option>
+            <optgroup label="Technical Team">
+              {technicians.map((t) => {
+                const count = issues.filter((i) => i.assigned_technician_id === t.id).length
+                return (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({count})
+                  </option>
+                )
+              })}
+            </optgroup>
+          </select>
+
           <div className="search-input-box">
             <IconSearch className="search-icon-inside" />
             <input
@@ -193,6 +259,13 @@ export default function ManagerIssues() {
           </div>
         </div>
       </div>
+
+      {feedbackToast && (
+        <div className="alert alert-info toast-feedback-bar">
+          <IconCheckCircle />
+          <span>{feedbackToast}</span>
+        </div>
+      )}
 
       {/* Issues Queue Cards */}
       {filteredIssues.length === 0 ? (
@@ -246,6 +319,15 @@ export default function ManagerIssues() {
                     <IconUsers /> {issue.reporter_count}{' '}
                     {issue.reporter_count === 1 ? 'affected student' : 'affected students'}
                   </span>
+                  {issue.assigned_technician ? (
+                    <span className="assigned-tech-pill" title={`Assigned to ${issue.assigned_technician}`}>
+                      👷 Assigned: <strong>{issue.assigned_technician}</strong>
+                    </span>
+                  ) : (
+                    <span className="unassigned-tech-pill">
+                      ⏳ Unassigned
+                    </span>
+                  )}
                 </div>
                 <p className="ticket-description-text">{issue.description}</p>
               </div>
@@ -253,6 +335,17 @@ export default function ManagerIssues() {
               {/* Workflow Actions Footer */}
               <div className="ticket-footer-actions">
                 <div className="workflow-buttons-group">
+                  {/* Dedicated Manager Action: Assign Task to Technical Team */}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-assign-trigger"
+                    disabled={actionLoading === issue.id}
+                    onClick={() => handleOpenAssignModal(issue)}
+                    title="Assign or reassign task to a technical team specialist"
+                  >
+                    <IconWrench /> {issue.assigned_technician ? 'Reassign Tech' : 'Assign to Tech'}
+                  </button>
+
                   {issue.status === 'open' && (
                     <>
                       <button
@@ -261,7 +354,7 @@ export default function ManagerIssues() {
                         disabled={actionLoading === issue.id}
                         onClick={() => handleQuickStatus(issue.id, 'in_progress')}
                       >
-                        <IconWrench /> Start Work
+                        Start Work
                       </button>
                       <button
                         type="button"
@@ -363,6 +456,133 @@ export default function ManagerIssues() {
                 onClick={confirmModalStatus}
               >
                 Confirm Status Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Task to Technical Team Modal */}
+      {assignModal && (
+        <div className="modal-overlay" onClick={() => setAssignModal(null)}>
+          <div className="modal-dialog-card assign-tech-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-with-icon">
+                <IconWrench />
+                <div>
+                  <h3>Assign Task to Technical Team</h3>
+                  <span className="modal-subtitle">Dispatch maintenance personnel to problem report</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-modal-close"
+                onClick={() => setAssignModal(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="assign-modal-body">
+              {/* Issue Summary Card */}
+              <div className="modal-issue-summary">
+                <div className="modal-ticket-head">
+                  <span className="summary-issue-title">{assignModal.issue.title}</span>
+                  <PriorityBadge priority={assignModal.issue.priority} />
+                </div>
+                <div className="summary-issue-meta">
+                  <span>📍 {location(assignModal.issue)}</span>
+                  <span>📁 {assignModal.issue.category_name}</span>
+                  {assignModal.issue.department_name && <span>🏢 {assignModal.issue.department_name}</span>}
+                </div>
+                {assignModal.issue.assigned_technician && (
+                  <div className="current-assignment-note">
+                    Currently assigned to: <strong>{assignModal.issue.assigned_technician}</strong>
+                  </div>
+                )}
+              </div>
+
+              {/* Technician Dropdown Selector */}
+              <label className="field">
+                <span className="field-label">Choose Field Technician</span>
+                <select
+                  className="styled-select tech-select-styled"
+                  value={selectedTechId}
+                  onChange={(e) => setSelectedTechId(e.target.value)}
+                  required
+                >
+                  {technicians.map((tech) => {
+                    const activeCount = issues.filter(
+                      (i) => i.assigned_technician_id === tech.id && (i.status === 'open' || i.status === 'in_progress'),
+                    ).length
+                    return (
+                      <option key={tech.id} value={tech.id}>
+                        {tech.name} — {tech.role} ({tech.status === 'online' ? 'On Duty' : 'Busy'} · {activeCount} active jobs)
+                      </option>
+                    )
+                  })}
+                </select>
+              </label>
+
+              {/* Dynamic Profile Preview Card of Selected Technician */}
+              {selectedTech && (
+                <div className="selected-tech-preview-card">
+                  <div className="preview-card-avatar">
+                    {selectedTech.name.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div className="preview-card-content">
+                    <div className="preview-name-row">
+                      <strong className="preview-tech-name">{selectedTech.name}</strong>
+                      <span className={`status-dot-badge ${selectedTech.status}`}>
+                        {selectedTech.status === 'online' ? '● On Duty' : '● Busy'}
+                      </span>
+                    </div>
+                    <span className="preview-tech-role">{selectedTech.role}</span>
+                    <div className="preview-tech-meta">
+                      <span>📍 Zone: {selectedTech.zone}</span>
+                      <span>📻 Radio: {selectedTech.radio}</span>
+                      <span className="preview-tech-workload">
+                        ⚡ {issues.filter((i) => i.assigned_technician_id === selectedTech.id && (i.status === 'open' || i.status === 'in_progress')).length} active jobs
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dispatch Handover Note */}
+              <label className="field">
+                <span className="field-label">Handover / Dispatch Instructions <em className="muted">(Optional)</em></span>
+                <textarea
+                  className="styled-textarea"
+                  rows={2}
+                  value={assignNote}
+                  onChange={(e) => setAssignNote(e.target.value)}
+                  placeholder="e.g. Bring replacement circuit breaker, inspect main breaker panel on 2nd floor..."
+                />
+              </label>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setAssignModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-dispatch-action"
+                disabled={!selectedTechId || actionLoading}
+                onClick={confirmAssignment}
+              >
+                {actionLoading ? (
+                  <span className="spinner-sm" />
+                ) : (
+                  <>
+                    <IconWrench /> Dispatch Task to {selectedTech?.name.split(' ')[0] || 'Technician'}
+                  </>
+                )}
               </button>
             </div>
           </div>

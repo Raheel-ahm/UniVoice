@@ -43,3 +43,6 @@ credentials.json
 
 # Local test logins
 TEST_ACCOUNTS.md
+
+# Local runtime data
+backend/data/

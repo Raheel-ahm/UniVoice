@@ -1,10 +1,16 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { db } from '../supabase.js'
-import { must } from '../lib/errors.js'
+import { HttpError, fromDbError, must } from '../lib/errors.js'
 import { parse, uuid, note, status } from '../lib/validate.js'
 import { requireRole } from '../middleware/auth.js'
 import { toIssueDto } from './issues.js'
+import {
+  TECHNICIANS,
+  assignIssue,
+  getAssignment,
+  getTechniciansWithStats,
+} from '../services/assignments.js'
 
 export const staffRouter = Router()
 staffRouter.use(requireRole('staff'))
@@ -22,6 +28,23 @@ function compareForTriage(a, b) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Technical Team: list technicians with active jobs and dispatch channels
+// ---------------------------------------------------------------------------
+staffRouter.get('/technicians', async (req, res) => {
+  const rows = must(
+    await db
+      .from('issue_overview')
+      .select('id, title, building, room, priority, status')
+      .limit(1000),
+  )
+  const team = getTechniciansWithStats(rows)
+  res.json({ technicians: team })
+})
+
+// ---------------------------------------------------------------------------
+// Issues: list all issues with technician assignment data attached
+// ---------------------------------------------------------------------------
 staffRouter.get('/issues', async (req, res) => {
   let query = db
     .from('issue_overview')
@@ -38,13 +61,28 @@ staffRouter.get('/issues', async (req, res) => {
   }
 
   const rows = must(await query)
-  const issues = rows.map(toIssueDto).sort(compareForTriage)
+  const issues = rows
+    .map(toIssueDto)
+    .map((issue) => {
+      const assignment = getAssignment(issue.id)
+      return {
+        ...issue,
+        assigned_technician: assignment?.technician_name ?? null,
+        assigned_technician_id: assignment?.technician_id ?? null,
+        assigned_at: assignment?.assigned_at ?? null,
+        assignment_note: assignment?.note ?? null,
+      }
+    })
+    .sort(compareForTriage)
+
   const summary = {
     open: issues.filter((i) => i.status === 'open').length,
     in_progress: issues.filter((i) => i.status === 'in_progress').length,
     overdue: issues.filter((i) => i.is_overdue).length,
     resolved: issues.filter((i) => i.status === 'resolved').length,
     closed: issues.filter((i) => i.status === 'closed').length,
+    assigned: issues.filter((i) => Boolean(i.assigned_technician)).length,
+    unassigned: issues.filter((i) => !i.assigned_technician && (i.status === 'open' || i.status === 'in_progress')).length,
     total: issues.length,
   }
 
@@ -53,6 +91,42 @@ staffRouter.get('/issues', async (req, res) => {
     : 'All Campus Facilities'
 
   res.json({ department: activeDeptName, summary, issues })
+})
+
+// ---------------------------------------------------------------------------
+// Manager: Assign task / issue to a technical team member
+// ---------------------------------------------------------------------------
+const assignSchema = z.object({
+  technician_id: z.string().min(1, 'Technician ID is required'),
+  technician_name: z.string().min(1, 'Technician Name is required'),
+  note: z.string().max(500).optional(),
+})
+
+staffRouter.patch('/issues/:id/assign', async (req, res) => {
+  const issueId = parse(uuid, req.params.id)
+  const input = parse(assignSchema, req.body)
+
+  // Verify technician exists in roster
+  const tech = TECHNICIANS.find((t) => t.id === input.technician_id) || {
+    id: input.technician_id,
+    name: input.technician_name,
+  }
+
+  const assignment = await assignIssue(
+    issueId,
+    tech.id,
+    input.technician_name || tech.name,
+    req.user.id,
+    input.note,
+  )
+
+  res.json({
+    ok: true,
+    issue_id: issueId,
+    assigned_technician: assignment.technician_name,
+    assigned_technician_id: assignment.technician_id,
+    assigned_at: assignment.assigned_at,
+  })
 })
 
 staffRouter.patch('/issues/:id/status', async (req, res) => {

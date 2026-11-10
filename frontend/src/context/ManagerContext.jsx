@@ -108,13 +108,91 @@ const INITIAL_MOCK_ISSUES = [
   },
 ]
 
+export const DEFAULT_TECHNICIANS = [
+  {
+    id: 't-1',
+    name: 'David Miller',
+    role: 'Lead Senior Electrician',
+    department: 'Electrical',
+    status: 'online',
+    zone: 'Science Block A, B & C',
+    radio: 'Ch. 4 (Ext. 210)',
+  },
+  {
+    id: 't-2',
+    name: 'Sarah Chen',
+    role: 'Facilities & Power Systems Tech',
+    department: 'Electrical',
+    status: 'online',
+    zone: 'Central Library & Student Center',
+    radio: 'Ch. 4 (Ext. 214)',
+  },
+  {
+    id: 't-3',
+    name: 'Marcus Vance',
+    role: 'HVAC & Circuit Maintenance',
+    department: 'HVAC',
+    status: 'busy',
+    zone: 'Engineering Complex & Labs',
+    radio: 'Ch. 5 (Ext. 219)',
+  },
+  {
+    id: 't-4',
+    name: 'Elena Rostova',
+    role: 'Low Voltage & Audio-Visual Systems',
+    department: 'IT & AV',
+    status: 'online',
+    zone: 'Humanities & Main Auditorium',
+    radio: 'Ch. 4 (Ext. 222)',
+  },
+  {
+    id: 't-5',
+    name: 'James Walker',
+    role: 'Plumbing & Hydraulic Infrastructure',
+    department: 'Plumbing',
+    status: 'on_call',
+    zone: 'Dormitories North & South',
+    radio: 'Emergency Line (Ext. 290)',
+  },
+  {
+    id: 't-6',
+    name: 'Carlos Mendez',
+    role: 'Structural & Carpentry Specialist',
+    department: 'Civil Infrastructure',
+    status: 'online',
+    zone: 'West Campus Buildings & Walkways',
+    radio: 'Ch. 3 (Ext. 235)',
+  },
+  {
+    id: 't-7',
+    name: 'Amina Diallo',
+    role: 'Janitorial & Sanitation Lead',
+    department: 'Sanitation',
+    status: 'online',
+    zone: 'Campus Wide Facilities',
+    radio: 'Ch. 2 (Ext. 201)',
+  },
+]
+
 export function ManagerProvider({ children }) {
   const { user, activeDepartment } = useAuth()
   const [data, setData] = useState(null)
   const [mockIssues, setMockIssues] = useState(INITIAL_MOCK_ISSUES)
+  const [technicians, setTechnicians] = useState(DEFAULT_TECHNICIANS)
   const [departmentFilter, setDepartmentFilter] = useState('all')
   const [isUsingLiveApi, setIsUsingLiveApi] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  const loadTechnicians = useCallback(() => {
+    api
+      .get('/staff/technicians')
+      .then((res) => {
+        if (res.technicians) setTechnicians(res.technicians)
+      })
+      .catch((err) => {
+        console.warn('Could not load technicians roster:', err)
+      })
+  }, [])
 
   const loadData = useCallback((dept = departmentFilter) => {
     const param = dept && dept !== 'all' ? `?department_id=${dept}` : ''
@@ -134,7 +212,8 @@ export function ManagerProvider({ children }) {
 
   useEffect(() => {
     loadData(departmentFilter)
-  }, [departmentFilter, loadData])
+    loadTechnicians()
+  }, [departmentFilter, loadData, loadTechnicians])
 
   const issues = useMemo(() => {
     if (isUsingLiveApi && data?.issues) return data.issues
@@ -149,6 +228,8 @@ export function ManagerProvider({ children }) {
       overdue: issues.filter((i) => i.is_overdue).length,
       resolved: issues.filter((i) => i.status === 'resolved').length,
       closed: issues.filter((i) => i.status === 'closed').length,
+      assigned: issues.filter((i) => Boolean(i.assigned_technician)).length,
+      unassigned: issues.filter((i) => !i.assigned_technician && (i.status === 'open' || i.status === 'in_progress')).length,
       total: issues.length,
     }
   }, [isUsingLiveApi, data, issues])
@@ -160,6 +241,7 @@ export function ManagerProvider({ children }) {
       if (isUsingLiveApi) {
         await api.patch(`/staff/issues/${issueId}/status`, { status: newStatus, note })
         loadData()
+        loadTechnicians()
       } else {
         setMockIssues((prev) =>
           prev.map((item) => {
@@ -179,7 +261,37 @@ export function ManagerProvider({ children }) {
         )
       }
     },
-    [isUsingLiveApi, loadData],
+    [isUsingLiveApi, loadData, loadTechnicians],
+  )
+
+  const assignTechnician = useCallback(
+    async (issueId, technicianId, technicianName, note = '') => {
+      if (isUsingLiveApi) {
+        await api.patch(`/staff/issues/${issueId}/assign`, {
+          technician_id: technicianId,
+          technician_name: technicianName,
+          note,
+        })
+        loadData()
+        loadTechnicians()
+      } else {
+        setMockIssues((prev) =>
+          prev.map((item) => {
+            if (item.id === issueId) {
+              return {
+                ...item,
+                assigned_technician: technicianName,
+                assigned_technician_id: technicianId,
+                assigned_at: new Date().toISOString(),
+                status: item.status === 'open' ? 'in_progress' : item.status,
+              }
+            }
+            return item
+          }),
+        )
+      }
+    },
+    [isUsingLiveApi, loadData, loadTechnicians],
   )
 
   return (
@@ -190,9 +302,12 @@ export function ManagerProvider({ children }) {
         setDepartmentFilter,
         issues,
         summary,
+        technicians,
         loading,
         loadData,
+        loadTechnicians,
         updateStatus,
+        assignTechnician,
         isUsingLiveApi,
       }}
     >

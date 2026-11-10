@@ -106,16 +106,32 @@ export default function IssueDetail() {
               </div>
             )}
             {isStaff && (
-              <div className="fact-item full-width">
-                <span className="fact-label">AI Triage Audit</span>
-                <span className="fact-value">
-                  {issue.ai_used ? (
-                    <AiSummary issue={issue} />
-                  ) : (
-                    <span className="muted">Not used (manual student submission)</span>
-                  )}
-                </span>
-              </div>
+              <>
+                <div className="fact-item full-width">
+                  <span className="fact-label">Field Technician Assignment</span>
+                  <span className="fact-value">
+                    {issue.assigned_technician ? (
+                      <span className="assigned-tech-pill font-bold">
+                        👷 {issue.assigned_technician}{' '}
+                        {issue.assigned_at && <span className="muted font-normal">· Assigned {formatDateTime(issue.assigned_at)}</span>}
+                      </span>
+                    ) : (
+                      <span className="unassigned-tech-pill">⏳ Unassigned (Pending Manager Dispatch)</span>
+                    )}
+                  </span>
+                </div>
+
+                <div className="fact-item full-width">
+                  <span className="fact-label">AI Triage Audit</span>
+                  <span className="fact-value">
+                    {issue.ai_used ? (
+                      <AiSummary issue={issue} />
+                    ) : (
+                      <span className="muted">Not used (manual student submission)</span>
+                    )}
+                  </span>
+                </div>
+              </>
             )}
           </div>
 
@@ -152,6 +168,9 @@ export default function IssueDetail() {
 
         {/* Right Action & Timeline Column */}
         <aside className="detail-sidebar-column">
+          {/* Staff Technician Assignment Widget */}
+          {isStaff && <AssignTechnicianWidget key={issue.assigned_technician_id || 'unassigned'} issue={issue} onChanged={load} />}
+
           {/* Staff Status Transition Controls */}
           {isStaff && <StatusControls key={issue.status} issue={issue} onChanged={load} />}
 
@@ -307,6 +326,101 @@ function StatusControls({ issue, onChanged }) {
           disabled={busy || !target}
         >
           {busy ? 'Updating Status…' : `Confirm: ${selected?.label ?? 'Update'}`}
+        </button>
+      </form>
+    </section>
+  )
+}
+
+function AssignTechnicianWidget({ issue, onChanged }) {
+  const [techs, setTechs] = useState([])
+  const [selectedTechId, setSelectedTechId] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    api
+      .get('/staff/technicians')
+      .then((res) => {
+        if (res.technicians) {
+          setTechs(res.technicians)
+          setSelectedTechId(issue.assigned_technician_id || res.technicians[0]?.id || '')
+        }
+      })
+      .catch(() => {})
+  }, [issue])
+
+  async function handleAssign(e) {
+    e.preventDefault()
+    if (!selectedTechId) return
+    const chosen = techs.find((t) => t.id === selectedTechId) || { id: selectedTechId, name: 'Technician' }
+    setBusy(true)
+    try {
+      await api.patch(`/staff/issues/${issue.id}/assign`, {
+        technician_id: chosen.id,
+        technician_name: chosen.name,
+        note,
+      })
+      setMsg(`Successfully assigned task to ${chosen.name}!`)
+      setTimeout(() => setMsg(null), 4000)
+      await onChanged()
+    } catch (err) {
+      alert(`Assignment failed: ${err.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card modern-detail-card assign-tech-widget">
+      <div className="staff-control-header">
+        <IconWrench />
+        <h3>Technical Team Dispatch</h3>
+      </div>
+      <p className="small muted">
+        {issue.assigned_technician
+          ? `Currently assigned to ${issue.assigned_technician}.`
+          : 'Assign a field technician from the technical team to resolve this issue.'}
+      </p>
+
+      {msg && <div className="alert alert-info mt-sm">{msg}</div>}
+
+      <form onSubmit={handleAssign} className="mt-sm">
+        <label className="field">
+          <span className="field-label">Field Technician</span>
+          <select
+            className="styled-select"
+            value={selectedTechId}
+            onChange={(e) => setSelectedTechId(e.target.value)}
+            required
+          >
+            {techs.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} — {t.role} ({t.activeJobs} active jobs)
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Handover Note (Optional)</span>
+          <input
+            className="styled-input"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Bring safety ladder, check breaker..."
+          />
+        </label>
+
+        <button type="submit" className="btn btn-primary btn-block mt-sm" disabled={busy || !selectedTechId}>
+          {busy ? (
+            <span className="spinner-sm" />
+          ) : (
+            <>
+              <IconWrench /> {issue.assigned_technician ? 'Reassign Technician' : 'Dispatch Technician'}
+            </>
+          )}
         </button>
       </form>
     </section>
