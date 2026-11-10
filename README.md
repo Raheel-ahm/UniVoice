@@ -1,112 +1,134 @@
 # UniVoice
 
-Students report physical campus problems: broken equipment, electrical faults, plumbing leaks and damaged infrastructure. AI suggests the category, responsible department and priority, and the student can accept or change them. Department staff work through a fixed status workflow, and overdue issues are escalated on their dashboard.
+> AI-Powered SE-MAX · CUI Tech Fest FA'26 · Team: UniVoice (Raheel Ahmad)
 
-```
-D:\UniVoice
-├── frontend/            React app (Vite)
-│   ├── src/
-│   └── .env.example     Frontend settings
-└── backend/             Express API (Node 22+)
-    ├── src/
-    ├── db/              SQL: schema, rules (RLS, triggers, functions), seed data
-    └── .env.example     Backend settings
-```
+## What it does
 
-## How it fits together
+UniVoice is an intelligent, privacy-first campus incident reporting and facilities operations platform. It combines automated AI triage (category, department, and SLA priority suggestions), duplicate problem detection, anonymous student protection, and real-time manager-to-technician dispatch with automatic SLA escalation.
 
-- **Browser:** signs in with Supabase Auth using the public anon key. It reads and writes all data through the UniVoice API, never straight from the tables.
-- **API (`backend/`):** checks the user's Supabase token on every request and loads their role and department from the database. It calls Claude for suggestions, then calls the database functions using the service role key.
-- **Database (`backend/db/02_rules.sql`):** enforces every rule even if the API is bypassed:
-  - The status workflow is checked by a trigger on every update.
-  - Students can't write to any table, and the API's functions can't be called with the anon key.
-  - Reporters only ever see their own reports. Staff only see their department's issues and never see who reported them.
-  - New accounts are always reporters.
-  - `issue_overview` uses `security_invoker`, so the view follows these same rules.
+## Problem and user
 
-### Rules
+- **The Problem:** Campus infrastructure defects (broken lab equipment, power failures, plumbing leaks) suffer from slow reporting, duplicate submissions, lost accountability, and delayed technician dispatch.
+- **The Users:**
+  1. **Students & Faculty:** Need a fast, anonymous way to report campus issues and see them resolved without bureaucratic hurdles.
+  2. **Facilities Managers:** Need centralized triage, automated SLA escalation tracking, and direct field technician dispatch tools.
+  3. **Field Technicians:** Need clear work orders with assigned zones, radio channels, and handover notes.
 
-| Rule | Where it's enforced |
-|---|---|
-| Only reporters submit or join issues | `create_issue`, `join_issue` |
-| Only staff of the issue's department change its status | `change_issue_status` |
-| Workflow: `open → in_progress → resolved → closed`, plus `open → closed` and `resolved → in_progress` (both need a note) | `issues_guard` trigger + `change_issue_status` |
-| Target time by priority: high 24 h, medium 72 h, low 7 days | `priority_sla`, set when the issue is created |
-| Overdue = past the target time and still open or in progress → escalated to the top of the dashboard | `issue_overview.is_overdue` |
-| AI values (`ai_*`) can't be faked | The API signs each suggestion and checks the signature when the issue is submitted |
-| Duplicates are only merged when the student confirms | `find_duplicate_issues` only suggests matches. `join_issue` runs only when the student clicks "This is my problem" |
-| Reporter identities stay private | Staff get notes and a count, never reporter IDs. Photo paths are random |
+## Live deployment
 
-## Setup
+- **URL / install link:** https://univoice.vercel.app (Unified Vercel deployment)
+- **Platform:** Vercel (Single full-stack deployment with Express Serverless API & Vite React SPA)
 
-### 1. Database (Supabase)
+## Judge quick start (under 5 minutes)
 
-In the Supabase dashboard, go to **SQL Editor** and run these files in order:
+Follow these steps to evaluate the product end-to-end:
 
-1. `backend/db/01_schema.sql`: creates the tables if they don't exist yet. Your existing tables are left alone.
-2. `backend/db/02_rules.sql`: the view, triggers, row-level security policies, functions and the private `issue-images` storage bucket.
-3. `backend/db/03_seed.sql` (optional): starter departments and categories.
+1. **Test Student Incident Reporting & AI Triage:**
+   - Log in with the **Student account** (`student@univoice.test` / `Uv-q96zotK69`).
+   - Click **"Report Issue"**.
+   - Enter Building (e.g., `Science Block A`), Room (`Lab 204`), and Description:
+     *"The air conditioner has a major water leak dripping over the power strip and power has tripped."*
+   - Click **"Continue with AI Suggestions"**: Notice how AI instantly recommends the Category (`Air Conditioning & Ventilation`), Department (`HVAC`), and Priority (`High` - 24h SLA).
+   - Alternatively, test manual control: Click **"Switch to Full Manual Mode"** to assign your own category/priority.
+   - Click **"Submit Work Order"**.
+2. **Test Duplicate Detection:**
+   - Report another issue with the same building and room. Notice the instant duplicate banner prompting you to click **"This is my problem too"** without cluttering the maintenance queue.
+3. **Test Manager Operations Hub & SLA Escalation:**
+   - Log out, then log in with the **Facilities Manager account** (`staff@univoice.test` / `Uv-dkPJh-b99`).
+   - Review the **Electrical Manager Dashboard**: view live SLA metrics, open work orders, and escalated overdue tickets.
+   - Open **"Work Orders & Triage"**: click on an issue to review triage notes and advance the state machine workflow (`open → in_progress → resolved → closed`).
+4. **Test Technician Dispatch:**
+   - On any work order, click **"Assign Tech"** (or go to **"Technicians Team"**).
+   - Use the compact assignment dialog to select an on-duty technician (e.g., *David Miller*), enter an optional handover note, and click **"Confirm & Assign"**.
+   - Notice the technician's workload and status update in real-time.
+5. **Test Emergency Hotline:**
+   - Click **"Emergency Dispatch"** in the sidebar or navigation to view instant one-click campus security calling for urgent safety hazards.
 
-> If your tables were created earlier with different enum type names, `01_schema.sql` simply skips them. `02_rules.sql` doesn't depend on those names.
+## Test accounts
 
-**Making a staff account.** Have the person sign up in the app first, then run:
+| Role | Username / email | Password |
+|------|------------------|----------|
+| Student (`user`) | `student@univoice.test` | `Uv-q96zotK69` |
+| Facilities Manager (`admin`, Electrical) | `staff@univoice.test` | `Uv-dkPJh-b99` |
 
-```sql
-update public.profiles
-set role = 'admin',
-    department_id = (select id from public.departments where name = 'Electrical')
-where id = (select id from auth.users where email = 'staff.member@campus.edu');
-```
+> *Note: These are pre-seeded demo accounts with privacy protection enabled. Passwords meet the strict security checklist.*
 
-### 2. Backend
+## Run locally
 
-Run `npm install` in `backend/`, then copy `backend/.env.example` to `backend/.env` and fill in:
+### Prerequisites
 
-- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`: from Project Settings → API. Keep the service role key secret and never put it in the frontend.
-- `ANTHROPIC_API_KEY`: needed for AI suggestions. Leave it empty and the app still works, with students choosing everything manually.
-- `SUGGESTION_SECRET`: any long random string.
+- Node.js 22 or higher
+- npm 10 or higher
+- A free Supabase project (PostgreSQL + Auth + Storage)
 
-Start it:
+### Setup
 
 ```bash
-cd backend
-npm run dev
+# 1. Clone the repository
+git clone https://github.com/Raheel-ahm/UniVoice.git
+cd UniVoice
+
+# 2. Install dependencies
+cd backend && npm install
+cd ../frontend && npm install
+cd ..
 ```
 
-### 3. Frontend
+### Environment variables
 
-Run `npm install` in `frontend/`, then copy `frontend/.env.example` to `frontend/.env.local` and set:
+Copy `.env.example` to `.env` in both folders:
 
+**`backend/.env`**:
+- `PORT` (e.g. 4000)
+- `FRONTEND_ORIGIN` (e.g. http://localhost:5173)
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY` (optional for AI suggestions)
+- `SUGGESTION_SECRET` (random string)
+
+**`frontend/.env.local`**:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-Then start it in a second terminal:
+### Run
+
+Start backend and frontend in separate terminals:
 
 ```bash
+# Terminal 1: Backend API
+cd backend
+npm run dev
+
+# Terminal 2: Frontend Client
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:5173. In development, Vite forwards `/api` to the backend on port 4000.
+Open `http://localhost:5173` in your browser.
 
-## AI suggestions
+### Run tests
 
-`backend/src/services/classifier.js` sends the report to Claude (`claude-opus-5-5` at low effort). Claude replies in a fixed format, picking from your actual categories and departments. Server-side refusal fallback is turned on.
+Run the automated test suite directly:
 
-If the AI is unavailable for any reason, students fill in the fields themselves and the issue is saved with `ai_used = false`. That covers a missing key, a timeout, a rate limit or a refusal.
+```bash
+npm test
+```
 
-## API
+## Known limitations
 
-All routes need `Authorization: Bearer <supabase access token>`, except `/api/health`.
+1. In-app voice calling uses system phone links (`tel:`) rather than WebRTC audio streams.
+2. The technician assignment file storage in serverless environments is persisted under `/tmp` (ephemeral across long cold starts unless backed by dedicated database tables).
 
-| Method | Path | Who |
-|---|---|---|
-| GET | `/api/me`, `/api/meta` | anyone signed in |
-| POST | `/api/ai/classify` | reporter |
-| POST | `/api/issues/duplicates` | reporter |
-| POST | `/api/issues` (multipart, optional `image`) | reporter |
-| POST | `/api/issues/:id/join` | reporter |
-| GET | `/api/issues/mine` | reporter |
-| GET | `/api/issues/:id` | a reporter linked to the issue, or staff of its department |
-| GET | `/api/staff/issues` | staff |
-| PATCH | `/api/staff/issues/:id/status` | staff |
+## Documentation
+
+- [Requirements](docs/requirements.md)
+- [Design](docs/design.md)
+- [Testing](docs/testing.md)
+- [AI usage log](docs/ai-usage-log.md)
+- [Judge checks](docs/judge-checks.md)
+
+## Team
+
+| Name | Role | Contact |
+|------|------|---------|
+| Raheel Ahmad | Full Stack Developer & System Architect | rahilahm456@gmail.com |

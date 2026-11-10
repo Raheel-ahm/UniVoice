@@ -3,6 +3,9 @@ import crypto from 'node:crypto'
 function required(name) {
   const value = process.env[name]
   if (!value) {
+    if (process.env.NODE_ENV === 'test' || process.env.TEST) {
+      return name.includes('URL') ? 'https://test.supabase.co' : 'test-dummy-key-123456789'
+    }
     console.error(`Missing required environment variable ${name}. Copy backend/.env.example to backend/.env and fill it in.`)
     process.exit(1)
   }
